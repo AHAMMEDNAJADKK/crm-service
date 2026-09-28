@@ -18,7 +18,7 @@ const server = http.createServer(app);
 // Configure Socket.io with production-safe CORS & transports
 const io = socketIo(server, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || '*',
+    origin: (origin, callback) => callback(null, true),
     credentials: true
   },
   transports: ['websocket', 'polling']
@@ -30,7 +30,7 @@ app.set('io', io);
 // Initialize Socket.io rooms & event listeners
 initQueueSocket(io);
 
-// Trust proxy for rate limiting behind reverse proxies
+// Trust proxy for rate limiting behind reverse proxies (Render, Vercel, Nginx)
 app.set('trust proxy', 1);
 
 // Production security and optimization middleware
@@ -39,10 +39,12 @@ app.use(helmet({
 }));
 app.use(compression());
 
-// CORS configuration
+// CORS configuration - dynamic origin reflection to support Vercel domains with credentials
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || true,
-  credentials: true
+  origin: (origin, callback) => callback(null, true),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 app.use(express.json());
