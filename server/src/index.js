@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const path = require('path');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const env = require('./config/env');
 const errorHandler = require('./middleware/errorHandler');
@@ -29,11 +30,6 @@ app.set('io', io);
 // Initialize Socket.io rooms & event listeners
 initQueueSocket(io);
 
-// Connect Database & initialize defaults for AHAMMED SONS WATER SERVICE
-connectDB().then(() => {
-  initBusinessDefaults();
-});
-
 // Trust proxy for rate limiting behind reverse proxies
 app.set('trust proxy', 1);
 
@@ -55,12 +51,15 @@ app.use(express.urlencoded({ extended: true }));
 // Serve Uploaded Files statically (uploads folder)
 app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
-// Health check endpoints
+// Health check endpoints with dynamic database connectivity reporting
 const healthHandler = (req, res) => {
+  const isDbConnected = mongoose.connection.readyState === 1;
   res.status(200).json({
     success: true,
-    status: 'ok',
-    message: 'AHAMMED SONS WATER SERVICE CRM API is running',
+    message: isDbConnected
+      ? 'AHAMMED SONS WATER SERVICE CRM API is running'
+      : 'AHAMMED SONS WATER SERVICE CRM API is running (Database disconnected)',
+    database: isDbConnected ? 'connected' : 'disconnected',
     business: 'AHAMMED SONS WATER SERVICE',
     timestamp: new Date().toISOString(),
     uptime: Math.round(process.uptime())
@@ -128,8 +127,40 @@ app.use('*', (req, res) => {
 app.use(errorHandler);
 
 const PORT = env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 AHAMMED SONS WATER SERVICE Server running in ${env.NODE_ENV} mode on port ${PORT}`);
+
+// Handle port already in use cleanly
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ [PORT CONFLICT] Port ${PORT} is already in use by another process.`);
+    console.error(`👉 Solution:`);
+    console.error(`   1. Stop the running process holding port ${PORT}, OR`);
+    console.error(`   2. In server/.env set a different port (e.g. PORT=5001).\n`);
+    process.exit(1);
+  }
+  console.error('❌ Server startup error:', err);
+  process.exit(1);
 });
 
-module.exports = { app, server };
+// Strict startup order: Environment -> MongoDB -> Business Defaults -> Server Listen
+const startServer = async () => {
+  try {
+    const conn = await connectDB();
+    if (conn) {
+      await initBusinessDefaults();
+    } else {
+      console.warn('⚠️ Server started with disconnected database. Health check will report database: "disconnected".');
+    }
+
+    server.listen(PORT, () => {
+      console.log(`🚀 AHAMMED SONS WATER SERVICE CRM Server running in ${env.NODE_ENV} mode on port ${PORT}`);
+      console.log(`🌐 Health check available at: http://localhost:${PORT}/api/health`);
+    });
+  } catch (err) {
+    console.error('❌ Server failed to initialize:', err);
+    process.exit(1);
+  }
+};
+
+startServer();
+
+module.exports = { app, server, startServer };

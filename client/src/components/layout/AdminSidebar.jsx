@@ -12,6 +12,8 @@ import {
   IndianRupee,
   Receipt,
   TrendingDown,
+  TrendingUp,
+  Calendar,
   AlertCircle,
   BarChart3,
   Settings,
@@ -53,7 +55,6 @@ export const AdminSidebar = ({ onOpenNewService }) => {
       type: 'section',
       title: 'Operations',
       items: [
-        { name: "Today's Services", path: '/admin/jobs', icon: Droplet },
         {
           name: 'New Service',
           icon: PlusCircle,
@@ -63,6 +64,7 @@ export const AdminSidebar = ({ onOpenNewService }) => {
             setMobileNavOpen(false);
           }
         },
+        { name: "Today's Services", path: '/admin/jobs', icon: Droplet },
         { name: 'Service History', path: '/admin/history', icon: History }
       ]
     },
@@ -87,22 +89,28 @@ export const AdminSidebar = ({ onOpenNewService }) => {
       type: 'section',
       title: 'Accounts',
       items: [
-        { name: 'Payments & Income', path: '/admin/billing', icon: Receipt },
+        { name: 'Payments', path: '/admin/billing', icon: Receipt },
+        { name: 'Income', path: '/admin/reports?tab=income', icon: TrendingUp },
         { name: 'Expenses', path: '/admin/expenses', icon: TrendingDown },
         { name: 'Outstanding', path: '/admin/outstanding', icon: AlertCircle }
       ]
     },
     {
-      type: 'single',
-      name: 'Reports',
-      path: '/admin/reports',
-      icon: BarChart3
+      type: 'section',
+      title: 'Reports',
+      items: [
+        { name: 'Daily Closing', path: '/admin/reports?tab=closing', icon: Calendar },
+        { name: 'Income Report', path: '/admin/reports?tab=income', icon: TrendingUp },
+        { name: 'Expense Report', path: '/admin/reports?tab=expense', icon: TrendingDown },
+        { name: 'Outstanding Due', path: '/admin/reports?tab=outstanding', icon: AlertCircle }
+      ]
     },
     {
-      type: 'single',
-      name: 'Settings',
-      path: '/admin/settings',
-      icon: Settings
+      type: 'section',
+      title: 'Settings',
+      items: [
+        { name: 'Business Settings', path: '/admin/settings', icon: Settings }
+      ]
     }
   ];
 

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const WashJob = require('../models/WashJob');
 const Customer = require('../models/Customer');
 const Vehicle = require('../models/Vehicle');
@@ -398,6 +399,10 @@ exports.getWashJobs = async (req, res, next) => {
 // 5. Get Single Wash Job by ID
 exports.getWashJobById = async (req, res, next) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Service Job not found' });
+    }
+
     const job = await WashJob.findById(req.params.id)
       .populate('customerId', 'name nameMalayalam mobile email address place')
       .populate('createdBy', 'name');

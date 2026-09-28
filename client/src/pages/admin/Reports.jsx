@@ -34,13 +34,20 @@ export const Reports = () => {
 
   const queryParams = new URLSearchParams(location.search);
   const initialSearch = queryParams.get('search') || '';
+  const tabParam = queryParams.get('tab') || queryParams.get('report') || '';
 
-  const [activeReport, setActiveReport] = useState('outstanding'); // 'outstanding', 'income', 'expense', 'closing', 'search'
+  const [activeReport, setActiveReport] = useState(tabParam || 'outstanding'); // 'outstanding', 'income', 'expense', 'closing', 'search'
   const [startDate, setStartDate] = useState(
     new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]
   );
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState(initialSearch);
+
+  useEffect(() => {
+    if (tabParam && ['outstanding', 'income', 'expense', 'closing', 'search'].includes(tabParam)) {
+      setActiveReport(tabParam);
+    }
+  }, [tabParam]);
 
   useEffect(() => {
     if (initialSearch) {

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '', // Vite proxy maps relative calls starting with /api
+  baseURL: import.meta.env.VITE_API_URL || '', // Vite proxy maps relative calls starting with /api
   headers: {
     'Content-Type': 'application/json'
   },

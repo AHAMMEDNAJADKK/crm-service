@@ -1,0 +1,10 @@
+{
+  "name": "service-station-backend",
+  "version": "1.0.0",
+  "description": "Backend API forwarder for AHAMMED SONS WATER SERVICE",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "server": "node server.js"
+  }
+}

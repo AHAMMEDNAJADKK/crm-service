@@ -59,16 +59,20 @@ const DEFAULT_SERVICES = [
 const initBusinessDefaults = async () => {
   try {
     // 1. Check & Seed Owner Account
-    const ownerExists = await User.findOne({ role: { $in: ['owner', 'admin'] } });
-    if (!ownerExists) {
+    const owner = await User.findOne({ role: { $in: ['owner', 'admin'] } });
+    if (!owner) {
       console.log('🌱 Seeding AHAMMED SONS WATER SERVICE admin user...');
       await User.create({
-        name: 'Ahammed Sons Admin',
+        name: 'AHAMMED SONS Owner',
         mobile: '9539691738',
         passwordHash: '0000', // Hashes via pre-save hook
         role: 'owner'
       });
       console.log('✅ Admin account seeded: mobile=9539691738, PIN=0000');
+    } else if (owner.name.toLowerCase().includes('aquaclean')) {
+      owner.name = 'AHAMMED SONS Owner';
+      await owner.save();
+      console.log('✅ Updated owner account name to AHAMMED SONS Owner');
     }
 
     // 2. Check & Seed Settings
