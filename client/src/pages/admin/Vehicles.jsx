@@ -1,90 +1,107 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Edit2, Trash2, ArrowLeft, Wrench, User, Calendar, ShieldAlert } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  ArrowLeft,
+  Car,
+  Clock,
+  User,
+  CheckCircle,
+  AlertCircle,
+  IndianRupee
+} from 'lucide-react';
 
 import api from '../../services/api';
 import useUiStore from '../../store/uiStore';
-import formatDate from '../../utils/formatDate';
 import formatCurrency from '../../utils/formatCurrency';
+import formatDate from '../../utils/formatDate';
 
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import Modal from '../../components/ui/Modal';
-import { TableContainer, Thead, Tbody, Tr, Th, Td } from '../../components/ui/Table';
+import MalayalamInputHelper from '../../components/common/MalayalamInputHelper';
 
 export const Vehicles = () => {
   const queryClient = useQueryClient();
   const { addToast } = useUiStore();
 
-  // Navigation states
   const [detailsId, setDetailsId] = useState(null);
-
-  // Search & Pagination states
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
-  // Modal forms states
+  // Form states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState(null);
   const [formData, setFormData] = useState({
     customerId: '',
     regNumber: '',
-    make: '',
+    vehicleType: 'car',
+    brand: '',
     model: '',
-    year: new Date().getFullYear(),
-    fuelType: 'petrol',
+    variant: '',
     colour: '',
-    engineCC: 1200,
+    fuelType: 'other',
     notes: ''
   });
 
-  // 1. Fetch Vehicles List Query
+  // 1. Fetch Vehicles List
   const { data: vehicleData, isLoading: isListLoading } = useQuery({
     queryKey: ['adminVehicles', search, page],
     queryFn: async () => {
       const { data } = await api.get('/api/v1/admin/vehicles', {
-        params: { page, limit: 10, search }
+        params: { page, limit: 15, search }
       });
       return data;
     }
   });
 
-  // 2. Fetch Selected Vehicle Details Query
+  // 2. Fetch Selected Vehicle Details & History
   const { data: detailsData, isLoading: isDetailsLoading } = useQuery({
     queryKey: ['adminVehicleDetails', detailsId],
     queryFn: async () => {
-      const { data } = await api.get(`/api/v1/admin/vehicles/${detailsId}/details`);
+      const { data } = await api.get(`/api/v1/admin/vehicles/${detailsId}/profile`);
       return data.data;
     },
     enabled: !!detailsId
   });
 
-  // 3. Fetch Customers for Add/Edit dropdown
-  const { data: customersList } = useQuery({
+  // 3. Fetch Customers for dropdown
+  const { data: customersList = [] } = useQuery({
     queryKey: ['adminDropdownCustomers'],
     queryFn: async () => {
       const { data } = await api.get('/api/v1/admin/customers?limit=100');
-      return data.data;
+      return data.data || [];
     }
   });
 
-  // 4. Create / Edit Vehicle Mutations
+  // 4. Fetch Active Vehicle Types
+  const { data: vTypes = [] } = useQuery({
+    queryKey: ['activeVehicleTypes'],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/admin/vehicle-types/active');
+      return res.data?.data || [];
+    }
+  });
+
+  // Save Vehicle Mutation
   const saveVehicleMutation = useMutation({
     mutationFn: async (payload) => {
       if (editingVehicle) {
         return await api.put(`/api/v1/admin/vehicles/${editingVehicle._id}`, payload);
-      } else {
-        return await api.post('/api/v1/admin/vehicles', payload);
       }
+      return await api.post('/api/v1/admin/vehicles', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminVehicles'] });
       if (detailsId) {
         queryClient.invalidateQueries({ queryKey: ['adminVehicleDetails', detailsId] });
       }
-      addToast(editingVehicle ? 'Vehicle details updated' : 'Vehicle registered successfully', 'success');
+      addToast(editingVehicle ? 'Vehicle updated successfully' : 'Vehicle registered successfully', 'success');
       closeFormModal();
     },
     onError: (err) => {
@@ -99,39 +116,40 @@ export const Vehicles = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminVehicles'] });
-      addToast('Vehicle deleted successfully', 'success');
+      addToast('Vehicle removed successfully', 'success');
       if (detailsId) setDetailsId(null);
     }
   });
 
-  const openFormModal = (v = null) => {
-    if (v) {
-      setEditingVehicle(v);
-      setFormData({
-        customerId: v.customerId?._id || v.customerId || '',
-        regNumber: v.regNumber,
-        make: v.make,
-        model: v.model,
-        year: v.year,
-        fuelType: v.fuelType,
-        colour: v.colour || '',
-        engineCC: v.engineCC,
-        notes: v.notes || ''
-      });
-    } else {
-      setEditingVehicle(null);
-      setFormData({
-        customerId: '',
-        regNumber: '',
-        make: '',
-        model: '',
-        year: new Date().getFullYear(),
-        fuelType: 'petrol',
-        colour: '',
-        engineCC: 1200,
-        notes: ''
-      });
-    }
+  const openCreateModal = () => {
+    setEditingVehicle(null);
+    setFormData({
+      customerId: '',
+      regNumber: '',
+      vehicleType: vTypes?.[0]?.code || 'car',
+      brand: '',
+      model: '',
+      variant: '',
+      colour: '',
+      fuelType: 'other',
+      notes: ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (veh) => {
+    setEditingVehicle(veh);
+    setFormData({
+      customerId: veh.customerId?._id || veh.customerId || '',
+      regNumber: veh.regNumber || '',
+      vehicleType: veh.vehicleType || 'car',
+      brand: veh.brand || veh.make || '',
+      model: veh.model || '',
+      variant: veh.variant || '',
+      colour: veh.colour || '',
+      fuelType: veh.fuelType || 'other',
+      notes: veh.notes || ''
+    });
     setIsModalOpen(true);
   };
 
@@ -140,440 +158,387 @@ export const Vehicles = () => {
     setEditingVehicle(null);
   };
 
-  const handleFormChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleFormSubmit = (e) => {
-    e.preventDefault();
-    saveVehicleMutation.mutate(formData);
-  };
+  const vehiclesList = vehicleData?.data || [];
+  const pagination = vehicleData?.pagination || { page: 1, pages: 1, total: 0 };
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Page Header */}
-      {!detailsId ? (
-        /* LIST HEADER */
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">Vehicles Registry</h1>
-            <p className="text-xs text-slate-500 mt-1">Manage workshop vehicle logs and service histories.</p>
-          </div>
-          <Button onClick={() => openFormModal()} icon={Plus}>
-            Register Vehicle
-          </Button>
-        </div>
-      ) : (
-        /* DETAILS HEADER */
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setDetailsId(null)}
-            className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
-            title="Go back to list"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight uppercase">
-              {detailsData?.vehicle?.regNumber || 'Vehicle Details'}
-            </h1>
-            <p className="text-xs text-slate-500 mt-1">Full service history and active jobs.</p>
-          </div>
-        </div>
-      )}
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto select-none">
+      
+      {/* If viewing a vehicle profile */}
+      {detailsId ? (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setDetailsId(null)}
+              className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white px-3 py-2 rounded-xl border border-slate-200 cursor-pointer shadow-2xs"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Vehicles Directory</span>
+            </button>
 
-      {/* Main Content Area */}
-      {!detailsId ? (
-        /* VEHICLES LIST TABLE */
-        <div className="flex flex-col gap-5">
-          <div className="bg-white p-4 border border-slate-200/60 rounded-xl flex items-center justify-between shadow-xs">
-            <div className="relative max-w-sm w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search registration number..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition-all uppercase"
-              />
-            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={Edit2}
+              onClick={() => detailsData?.vehicle && openEditModal(detailsData.vehicle)}
+            >
+              Edit Vehicle Details
+            </Button>
           </div>
 
-          {isListLoading ? (
-            <div className="py-20 flex justify-center"><Spinner size="lg" /></div>
-          ) : (
-            <>
-              <TableContainer>
-                <Thead>
-                  <Tr>
-                    <Th isSticky>Reg Number</Th>
-                    <Th>Make & Model</Th>
-                    <Th>Customer</Th>
-                    <Th>Fuel Type</Th>
-                    <Th>Engine (CC)</Th>
-                    <Th className="text-right">Actions</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {vehicleData?.data?.length === 0 ? (
-                    <Tr>
-                      <Td colSpan={6} className="text-center text-slate-400 py-10">No vehicle records found</Td>
-                    </Tr>
-                  ) : (
-                    vehicleData.data.map((v) => (
-                      <Tr key={v._id}>
-                        <Td isSticky className="font-bold text-slate-800">
-                          <button
-                            onClick={() => setDetailsId(v._id)}
-                            className="hover:text-brand-600 font-bold uppercase transition-colors cursor-pointer text-left"
-                          >
-                            {v.regNumber}
-                          </button>
-                        </Td>
-                        <Td className="font-medium">{v.make} {v.model} ({v.year})</Td>
-                        <Td className="text-slate-500 font-medium">{v.customerId?.name || 'N/A'}</Td>
-                        <Td className="capitalize"><Badge variant="neutral">{v.fuelType}</Badge></Td>
-                        <Td className="font-semibold text-slate-600">{v.engineCC} cc</Td>
-                        <Td className="text-right flex items-center justify-end gap-1.5 py-3">
-                          <button
-                            onClick={() => openFormModal(v)}
-                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (window.confirm('Delete vehicle record?')) {
-                                deleteVehicleMutation.mutate(v._id);
-                              }
-                            }}
-                            className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </Td>
-                      </Tr>
-                    ))
-                  )}
-                </Tbody>
-              </TableContainer>
+          {isDetailsLoading ? (
+            <div className="py-20 text-center"><Spinner size="lg" /></div>
+          ) : detailsData?.vehicle ? (
+            <div className="space-y-6">
+              {/* Vehicle Profile Card Header */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-black font-mono text-slate-900 uppercase tracking-wide">
+                      {detailsData.vehicle.regNumber}
+                    </span>
+                    <span className="text-xs bg-brand-50 text-brand-700 font-bold uppercase px-2.5 py-1 rounded-md">
+                      {detailsData.vehicle.vehicleType}
+                    </span>
+                  </div>
 
-              {/* Pagination controls */}
-              {vehicleData?.pagination && (
-                <div className="flex justify-between items-center bg-white px-6 py-4.5 border border-slate-200/60 rounded-xl shadow-xs">
-                  <span className="text-xs text-slate-500">
-                    Showing Page <span className="font-bold text-slate-800">{page}</span> of {vehicleData.pagination.pages}
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      Prev
-                    </button>
-                    <button
-                      onClick={() => setPage(p => Math.min(vehicleData.pagination.pages, p + 1))}
-                      disabled={page === vehicleData.pagination.pages}
-                      className="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      ) : (
-        /* VEHICLE PROFILE DETAILS VIEW */
-        isDetailsLoading ? (
-          <div className="py-20 flex justify-center"><Spinner size="lg" /></div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Left: Vehicle Specs & Owner */}
-            <div className="flex flex-col gap-6 lg:col-span-1">
-              {/* Specs Card */}
-              <Card title="Vehicle Specification" bodyClassName="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between text-sm py-1 border-b border-slate-100">
-                    <span className="text-slate-400">Make / Model</span>
-                    <span className="font-bold text-slate-700">{detailsData.vehicle.make} {detailsData.vehicle.model}</span>
-                  </div>
-                  <div className="flex justify-between text-sm py-1 border-b border-slate-100">
-                    <span className="text-slate-400">Manufacturing Year</span>
-                    <span className="font-bold text-slate-700">{detailsData.vehicle.year}</span>
-                  </div>
-                  <div className="flex justify-between text-sm py-1 border-b border-slate-100">
-                    <span className="text-slate-400">Fuel Category</span>
-                    <span className="font-bold text-slate-700 uppercase">{detailsData.vehicle.fuelType}</span>
-                  </div>
-                  <div className="flex justify-between text-sm py-1 border-b border-slate-100">
-                    <span className="text-slate-400">Engine displacement</span>
-                    <span className="font-bold text-slate-700">{detailsData.vehicle.engineCC} cc</span>
-                  </div>
-                  <div className="flex justify-between text-sm py-1">
-                    <span className="text-slate-400">Colour</span>
-                    <span className="font-bold text-slate-700">{detailsData.vehicle.colour || 'N/A'}</span>
-                  </div>
-                </div>
+                  <p className="text-xs text-slate-500 font-medium pt-1">
+                    {detailsData.vehicle.brand} {detailsData.vehicle.model} {detailsData.vehicle.colour ? `• ${detailsData.vehicle.colour}` : ''}
+                  </p>
 
-                {detailsData.vehicle.notes && (
-                  <div className="mt-2 p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Vehicle Notes</span>
-                    <p className="text-xs text-slate-600 leading-relaxed">{detailsData.vehicle.notes}</p>
-                  </div>
-                )}
-
-                <div className="flex gap-2 mt-4">
-                  <Button
-                    onClick={() => openFormModal(detailsData.vehicle)}
-                    variant="outline"
-                    className="flex-1"
-                    size="sm"
-                  >
-                    Edit details
-                  </Button>
-                </div>
-              </Card>
-
-              {/* Owner Info Card */}
-              <Card title="Customer Profile" bodyClassName="flex flex-col gap-3">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2.5 rounded-full bg-slate-100 text-slate-600">
-                    <User className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="font-extrabold text-slate-800 text-sm">{detailsData.vehicle.customerId?.name}</h5>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Vehicle Owner</p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 text-xs text-slate-500">
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span>Mobile</span>
-                    <span className="font-semibold text-slate-700">{detailsData.vehicle.customerId?.mobile}</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span>Email</span>
-                    <span className="font-semibold text-slate-700">{detailsData.vehicle.customerId?.email || 'N/A'}</span>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            {/* Right: Active Service & History */}
-            <div className="flex flex-col gap-6 lg:col-span-2">
-              {/* Active Open Job Card */}
-              <Card title="Active Repair Status">
-                {detailsData.openJobCard ? (
-                  <div className="p-5 bg-brand-50/20 border border-brand-100/50 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-slate-800 text-base">{detailsData.openJobCard.jobNumber}</span>
-                        <Badge variant={detailsData.openJobCard.status}>{detailsData.openJobCard.status}</Badge>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-2">
-                        Service type: <span className="font-bold text-slate-700">{detailsData.openJobCard.serviceType.join(', ')}</span>
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Assigned Mechanic: <span className="font-bold text-slate-700">{detailsData.openJobCard.mechanicId?.name || 'Unassigned'}</span>
-                      </p>
+                  {detailsData.vehicle.customerId && (
+                    <div className="text-xs text-slate-600 flex items-center gap-2 pt-1 font-semibold">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Owner: {detailsData.vehicle.customerId.name} ({detailsData.vehicle.customerId.mobile})</span>
                     </div>
-                    <Button
-                      onClick={() => navigate(`/admin/jobs?id=${detailsData.openJobCard._id}`)}
-                      size="sm"
-                    >
-                      Open Job Card
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-400 text-center py-6">No active repairs. Vehicle is not checked in.</p>
-                )}
-              </Card>
+                  )}
+                </div>
 
-              {/* Service history timeline list */}
-              <Card title="Servicing History Logs">
-                {detailsData.history?.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-10">No past services registered for this vehicle.</p>
+                {/* Service Statistics */}
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-center min-w-[90px]">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Total Visits</span>
+                    <span className="text-lg font-black font-mono text-slate-800">{detailsData.stats?.totalVisits || 0}</span>
+                  </div>
+                  <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-center min-w-[110px]">
+                    <span className="text-[10px] text-emerald-600 font-bold uppercase block">Total Paid</span>
+                    <span className="text-lg font-black font-mono text-emerald-700">
+                      {formatCurrency(detailsData.stats?.totalPaid || 0)}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-center min-w-[110px]">
+                    <span className="text-[10px] text-red-500 font-bold uppercase block">Outstanding</span>
+                    <span className="text-lg font-black font-mono text-red-700">
+                      {formatCurrency(detailsData.stats?.outstanding || 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Service History Timeline */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">
+                <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-brand-600" />
+                  Service History
+                </h3>
+
+                {(detailsData.serviceHistory || []).length === 0 ? (
+                  <p className="text-xs text-slate-400 py-6 text-center">No service records found for this vehicle.</p>
                 ) : (
-                  <div className="flex flex-col gap-4">
-                    {detailsData.history.map((h) => (
-                      <div key={h._id} className="p-4 border border-slate-100 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:border-slate-200 transition-colors">
+                  <div className="divide-y divide-slate-100">
+                    {detailsData.serviceHistory.map(j => (
+                      <div key={j._id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-800 text-sm">{h.jobNumber}</span>
-                            <Badge variant={h.status}>{h.status}</Badge>
+                            <span className="font-bold text-slate-800 capitalize">{j.serviceName || j.washPackage}</span>
+                            <Badge variant={j.status}>{j.serviceStatus || j.status}</Badge>
                           </div>
-                          <p className="text-xs text-slate-500 mt-1.5">
-                            Services: <span className="font-semibold text-slate-700">{h.serviceType.join(', ')}</span>
-                          </p>
+                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                            {formatDate(j.createdAt, true)} • Token: {j.tokenNumber}
+                          </span>
                         </div>
-                        <div className="text-left sm:text-right shrink-0">
-                          <p className="text-xs font-semibold text-slate-700">Labour Billed: {formatCurrency(h.labourCharges)}</p>
-                          <p className="text-[10px] text-slate-400 mt-1">{formatDate(h.createdAt)}</p>
+
+                        <div className="flex items-center gap-4 text-right">
+                          <div>
+                            <span className="font-mono font-bold text-slate-900 block text-sm">
+                              {formatCurrency(j.finalAmount !== undefined ? j.finalAmount : (j.price || 0))}
+                            </span>
+                            <span className={`text-[10px] font-bold uppercase ${
+                              j.paymentStatus === 'paid' ? 'text-emerald-600' : 'text-amber-600'
+                            }`}>
+                              {j.paymentStatus}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
-              </Card>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        /* Vehicles Directory View */
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                Vehicle Management
+              </h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Vehicle registry with intelligent Indian plate normalization and customer linkage.
+              </p>
             </div>
 
+            <Button icon={Plus} onClick={openCreateModal}>
+              Register Vehicle
+            </Button>
           </div>
-        )
+
+          {/* Search Box */}
+          <div className="bg-white p-4 border border-slate-200/60 rounded-xl shadow-xs">
+            <div className="relative max-w-md w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search plate (e.g. KL 01 AB 1234), model, brand..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-medium focus:outline-none focus:border-brand-500 focus:bg-white transition-all uppercase"
+              />
+            </div>
+          </div>
+
+          {/* Vehicles List */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+            {isListLoading ? (
+              <div className="py-20 text-center"><Spinner size="lg" /></div>
+            ) : vehiclesList.length === 0 ? (
+              <div className="py-16 text-center text-slate-400 text-xs">No vehicle records found.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                      <th className="py-3 px-4">Registration Plate</th>
+                      <th className="py-3 px-4">Category</th>
+                      <th className="py-3 px-4">Make / Model</th>
+                      <th className="py-3 px-4">Customer</th>
+                      <th className="py-3 px-4">Color</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {vehiclesList.map(v => (
+                      <tr key={v._id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3 px-4 font-mono font-black text-slate-900 text-sm uppercase">
+                          <button
+                            type="button"
+                            onClick={() => setDetailsId(v._id)}
+                            className="hover:text-brand-600 cursor-pointer"
+                          >
+                            {v.regNumber}
+                          </button>
+                        </td>
+
+                        <td className="py-3 px-4 uppercase font-semibold text-slate-600 text-[11px]">
+                          {v.vehicleType}
+                        </td>
+
+                        <td className="py-3 px-4 text-slate-700 font-medium">
+                          {v.brand || v.make || ''} {v.model || ''}
+                        </td>
+
+                        <td className="py-3 px-4 font-semibold text-slate-800">
+                          {v.customerId?.name ? (
+                            <div>
+                              <span>{v.customerId.name}</span>
+                              <span className="text-[10px] text-slate-400 block">{v.customerId.mobile}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic">Unlinked</span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4 text-slate-600">
+                          {v.colour || '-'}
+                        </td>
+
+                        <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setDetailsId(v._id)}
+                          >
+                            Profile
+                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(v)}
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 inline" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete vehicle ${v.regNumber}?`)) {
+                                deleteVehicleMutation.mutate(v._id);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* VEHICLE FORM MODAL */}
+      {/* CREATE / EDIT VEHICLE MODAL */}
       <Modal
         isOpen={isModalOpen}
         onClose={closeFormModal}
-        title={editingVehicle ? 'Update Vehicle Details' : 'Register New Vehicle'}
-        size="lg"
+        title={editingVehicle ? 'Edit Vehicle' : 'Register Vehicle'}
+        size="md"
       >
-        <form onSubmit={handleFormSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveVehicleMutation.mutate(formData);
+          }}
+          className="flex flex-col gap-4 text-slate-800 text-xs"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="regNumber" className="block text-xs font-bold text-slate-500 uppercase mb-2">Registration Number</label>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Registration Plate</label>
               <input
                 type="text"
-                id="regNumber"
-                name="regNumber"
                 value={formData.regNumber}
-                onChange={handleFormChange}
-                placeholder="E.g. DL3CAN1234"
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm uppercase"
+                onChange={(e) => setFormData(prev => ({ ...prev, regNumber: e.target.value.toUpperCase() }))}
+                placeholder="E.g. KL 11 AB 1234"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono font-bold uppercase"
                 required
               />
             </div>
+
             <div>
-              <label htmlFor="customerId" className="block text-xs font-bold text-slate-500 uppercase mb-2">Vehicle Owner (Customer)</label>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Vehicle Category</label>
               <select
-                id="customerId"
-                name="customerId"
-                value={formData.customerId}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+                value={formData.vehicleType}
+                onChange={(e) => setFormData(prev => ({ ...prev, vehicleType: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                 required
               >
-                <option value="">-- Select Customer --</option>
-                {customersList?.map((cust) => (
-                  <option key={cust._id} value={cust._id}>{cust.name} ({cust.mobile})</option>
+                {vTypes.map(vt => (
+                  <option key={vt.code} value={vt.code}>{vt.name}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block font-bold uppercase text-slate-500 mb-1">Linked Customer (Optional)</label>
+            <select
+              value={formData.customerId}
+              onChange={(e) => setFormData(prev => ({ ...prev, customerId: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+            >
+              <option value="">-- No Customer / Walk-in --</option>
+              {customersList.map(c => (
+                <option key={c._id} value={c._id}>{c.name} ({c.mobile})</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="make" className="block text-xs font-bold text-slate-500 uppercase mb-2">Manufacturer (Make)</label>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Brand / Make</label>
               <input
                 type="text"
-                id="make"
-                name="make"
-                value={formData.make}
-                onChange={handleFormChange}
-                placeholder="E.g. Maruti Suzuki"
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm"
-                required
+                value={formData.brand}
+                onChange={(e) => setFormData(prev => ({ ...prev, brand: e.target.value }))}
+                placeholder="E.g. Maruti, Hyundai, Tata"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
               />
             </div>
             <div>
-              <label htmlFor="model" className="block text-xs font-bold text-slate-500 uppercase mb-2">Vehicle Model</label>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Model / Variant</label>
               <input
                 type="text"
-                id="model"
-                name="model"
                 value={formData.model}
-                onChange={handleFormChange}
-                placeholder="E.g. Swift"
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm"
-                required
+                onChange={(e) => setFormData(prev => ({ ...prev, model: e.target.value }))}
+                placeholder="E.g. Swift, Creta"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="year" className="block text-xs font-bold text-slate-500 uppercase mb-2">Manufacturing Year</label>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Color</label>
               <input
-                type="number"
-                id="year"
-                name="year"
-                value={formData.year}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm"
-                required
+                type="text"
+                value={formData.colour}
+                onChange={(e) => setFormData(prev => ({ ...prev, colour: e.target.value }))}
+                placeholder="E.g. White, Black, Silver"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
               />
             </div>
             <div>
-              <label htmlFor="fuelType" className="block text-xs font-bold text-slate-500 uppercase mb-2">Fuel Type</label>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Fuel Type</label>
               <select
-                id="fuelType"
-                name="fuelType"
                 value={formData.fuelType}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+                onChange={(e) => setFormData(prev => ({ ...prev, fuelType: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
               >
                 <option value="petrol">Petrol</option>
                 <option value="diesel">Diesel</option>
                 <option value="cng">CNG</option>
-                <option value="electric">Electric</option>
-                <option value="hybrid">Hybrid</option>
+                <option value="electric">Electric (EV)</option>
+                <option value="other">Other</option>
               </select>
             </div>
-            <div>
-              <label htmlFor="engineCC" className="block text-xs font-bold text-slate-500 uppercase mb-2">Engine capacity (CC)</label>
-              <input
-                type="number"
-                id="engineCC"
-                name="engineCC"
-                value={formData.engineCC}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm"
-                required
-              />
-            </div>
           </div>
 
           <div>
-            <label htmlFor="colour" className="block text-xs font-bold text-slate-500 uppercase mb-2">Vehicle Colour</label>
-            <input
-              type="text"
-              id="colour"
-              name="colour"
-              value={formData.colour}
-              onChange={handleFormChange}
-              className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="notes" className="block text-xs font-bold text-slate-500 uppercase mb-2">Vehicle Notes</label>
+            <label className="block font-bold uppercase text-slate-500 mb-1">Notes</label>
             <textarea
-              id="notes"
-              name="notes"
+              rows={2}
               value={formData.notes}
-              onChange={handleFormChange}
-              rows="2"
-              placeholder="E.g. Minor scratches on doors"
-              className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm resize-none"
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              placeholder="Vehicle observations or customer preferences..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm resize-none"
+            />
+            <MalayalamInputHelper
+              onSelectPhrase={(phrase) => setFormData(prev => ({
+                ...prev,
+                notes: prev.notes ? `${prev.notes}, ${phrase}` : phrase
+              }))}
             />
           </div>
 
-          <div className="flex gap-3 justify-end mt-4">
-            <Button type="button" variant="secondary" onClick={closeFormModal}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={saveVehicleMutation.isPending}>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={closeFormModal}>Cancel</Button>
+            <Button type="submit" variant="primary" isLoading={saveVehicleMutation.isPending}>
               Save Vehicle
             </Button>
           </div>
         </form>
       </Modal>
+
     </div>
   );
 };

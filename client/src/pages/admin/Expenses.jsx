@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Edit2, Trash2, Calendar, FileText, Upload } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Calendar,
+  FileText,
+  Upload,
+  TrendingDown,
+  Filter,
+  DollarSign
+} from 'lucide-react';
 
 import api from '../../services/api';
 import useUiStore from '../../store/uiStore';
@@ -12,11 +23,11 @@ import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import Modal from '../../components/ui/Modal';
-import { TableContainer, Thead, Tbody, Tr, Th, Td } from '../../components/ui/Table';
+import MalayalamInputHelper from '../../components/common/MalayalamInputHelper';
 
 export const Expenses = () => {
   const queryClient = useQueryClient();
-  const { addToast } = useUiStore();
+  const { addToast, stationSettings } = useUiStore();
 
   // Search & Filter state
   const [search, setSearch] = useState('');
@@ -30,7 +41,8 @@ export const Expenses = () => {
   const [editingExpense, setEditingExpense] = useState(null);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    category: 'utilities',
+    category: 'Cleaning Materials',
+    title: '',
     description: '',
     amount: '',
     paymentMethod: 'cash',
@@ -38,14 +50,32 @@ export const Expenses = () => {
     notes: ''
   });
 
-  const categories = ['fuel', 'utilities', 'wages', 'parts-purchase', 'maintenance', 'marketing', 'other'];
+  const defaultCategories = [
+    'Cleaning Materials',
+    'Foam Liquid',
+    'Shampoo',
+    'Undercoating Materials',
+    'Water Expenses',
+    'Electricity',
+    'Salary / Wages',
+    'Vehicle Maintenance',
+    'Equipment Maintenance',
+    'Rent',
+    'Transport',
+    'Miscellaneous',
+    'Other'
+  ];
+
+  const categories = stationSettings?.expenseCategories?.length > 0
+    ? stationSettings.expenseCategories
+    : defaultCategories;
 
   // 1. Fetch Expenses Query
   const { data: expensesData, isLoading: isListLoading } = useQuery({
     queryKey: ['adminExpenses', search, category, startDate, endDate, page],
     queryFn: async () => {
       const { data } = await api.get('/api/v1/admin/expenses', {
-        params: { page, limit: 10, search, category, startDate, endDate }
+        params: { page, limit: 15, search, category, startDate, endDate }
       });
       return data;
     }
@@ -53,53 +83,37 @@ export const Expenses = () => {
 
   // 2. Fetch Category Summary
   const { data: summaryData } = useQuery({
-    queryKey: ['adminExpensesSummary'],
+    queryKey: ['adminExpensesSummary', startDate, endDate],
     queryFn: async () => {
-      const { data } = await api.get('/api/v1/admin/expenses/summary');
+      const { data } = await api.get('/api/v1/admin/expenses/summary', {
+        params: { startDate, endDate }
+      });
       return data.data;
     }
   });
 
-  // 3. Create / Edit Mutations
+  // Create / Edit Mutation
   const saveExpenseMutation = useMutation({
     mutationFn: async (payload) => {
-      const mappedPayload = {
+      const mapped = {
         ...payload,
         amount: parseFloat(payload.amount)
       };
 
       if (editingExpense) {
-        return await api.put(`/api/v1/admin/expenses/${editingExpense._id}`, mappedPayload);
-      } else {
-        return await api.post('/api/v1/admin/expenses', mappedPayload);
+        return await api.put(`/api/v1/admin/expenses/${editingExpense._id}`, mapped);
       }
+      return await api.post('/api/v1/admin/expenses', mapped);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminExpenses'] });
       queryClient.invalidateQueries({ queryKey: ['adminExpensesSummary'] });
-      addToast(editingExpense ? 'Expense updated successfully' : 'Expense recorded successfully', 'success');
+      queryClient.invalidateQueries({ queryKey: ['adminDashboardToday'] });
+      addToast(editingExpense ? 'Expense updated' : 'Expense recorded successfully', 'success');
       closeFormModal();
     },
     onError: (err) => {
       addToast(err.response?.data?.error || 'Failed to save expense', 'error');
-    }
-  });
-
-  // Upload Receipt Mutation
-  const uploadReceiptMutation = useMutation({
-    mutationFn: async ({ id, file }) => {
-      const fileData = new FormData();
-      fileData.append('receipt', file);
-      return await api.post(`/api/v1/admin/expenses/${id}/receipt`, fileData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['adminExpenses'] });
-      addToast('Receipt uploaded and linked successfully', 'success');
-    },
-    onError: (err) => {
-      addToast(err.response?.data?.error || 'Failed to upload receipt', 'error');
     }
   });
 
@@ -111,34 +125,38 @@ export const Expenses = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminExpenses'] });
       queryClient.invalidateQueries({ queryKey: ['adminExpensesSummary'] });
-      addToast('Expense record deleted', 'success');
+      queryClient.invalidateQueries({ queryKey: ['adminDashboardToday'] });
+      addToast('Expense removed', 'success');
     }
   });
 
-  const openFormModal = (exp = null) => {
-    if (exp) {
-      setEditingExpense(exp);
-      setFormData({
-        date: exp.date ? exp.date.split('T')[0] : new Date().toISOString().split('T')[0],
-        category: exp.category,
-        description: exp.description,
-        amount: exp.amount,
-        paymentMethod: exp.paymentMethod,
-        vendor: exp.vendor || '',
-        notes: exp.notes || ''
-      });
-    } else {
-      setEditingExpense(null);
-      setFormData({
-        date: new Date().toISOString().split('T')[0],
-        category: 'utilities',
-        description: '',
-        amount: '',
-        paymentMethod: 'cash',
-        vendor: '',
-        notes: ''
-      });
-    }
+  const openCreateModal = () => {
+    setEditingExpense(null);
+    setFormData({
+      date: new Date().toISOString().split('T')[0],
+      category: categories[0] || 'Cleaning Materials',
+      title: '',
+      description: '',
+      amount: '',
+      paymentMethod: 'cash',
+      vendor: '',
+      notes: ''
+    });
+    setIsFormOpen(true);
+  };
+
+  const openEditModal = (exp) => {
+    setEditingExpense(exp);
+    setFormData({
+      date: new Date(exp.date).toISOString().split('T')[0],
+      category: exp.category || 'Cleaning Materials',
+      title: exp.title || exp.description || '',
+      description: exp.description || exp.title || '',
+      amount: exp.amount,
+      paymentMethod: exp.paymentMethod || 'cash',
+      vendor: exp.vendor || '',
+      notes: exp.notes || ''
+    });
     setIsFormOpen(true);
   };
 
@@ -147,236 +165,201 @@ export const Expenses = () => {
     setEditingExpense(null);
   };
 
-  const handleFormChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleFormSubmit = (e) => {
-    e.preventDefault();
-    saveExpenseMutation.mutate(formData);
-  };
-
-  const handleReceiptUpload = (e, id) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    uploadReceiptMutation.mutate({
-      id,
-      file: e.target.files[0]
-    });
-  };
+  const expensesList = expensesData?.data || [];
+  const totalSpent = expensesData?.summary?.totalSpent || summaryData?.totalSpent || 0;
+  const pagination = expensesData?.pagination || { page: 1, pages: 1, total: 0 };
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto select-none">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Operating Expenses</h1>
-          <p className="text-xs text-slate-500 mt-1">Audit utility bills, inventory parts orders, wages, and vendor receipts.</p>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Station Expense Management
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Track washing chemicals, shampoos, electricity, water, and staff maintenance costs.
+          </p>
         </div>
-        <Button onClick={() => openFormModal()} icon={Plus}>
-          Record Expense
-        </Button>
+
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+            <span className="text-[10px] font-bold text-red-600 uppercase block">Total Expenses:</span>
+            <span className="text-lg font-black font-mono text-red-700">{formatCurrency(totalSpent)}</span>
+          </div>
+
+          <Button icon={Plus} onClick={openCreateModal}>
+            Log Expense
+          </Button>
+        </div>
       </div>
 
-      {/* Category breakdown summaries */}
-      {summaryData && summaryData.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-          {summaryData.map((item) => (
-            <div key={item._id} className="bg-white border border-slate-200/60 rounded-xl p-3.5 shadow-xs text-center">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block capitalize">{item._id}</span>
-              <span className="font-extrabold text-sm text-slate-800 mt-1 block">{formatCurrency(item.total)}</span>
-              <span className="text-[9px] text-slate-400 mt-0.5 block">{item.count} items</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Filter bar */}
-      <div className="bg-white p-4 border border-slate-200/60 rounded-xl flex flex-wrap gap-4 items-center justify-between shadow-xs">
-        <div className="relative max-w-xs w-full">
+      {/* Filter Toolbar */}
+      <div className="bg-white p-4 border border-slate-200/60 rounded-xl shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
           <input
             type="text"
-            placeholder="Search description or vendor..."
+            placeholder="Search expense description, vendor, ID..."
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition-all"
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-brand-500 focus:bg-white"
           />
         </div>
-        <div className="flex flex-wrap gap-3.5 items-center">
+
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={category}
-            onChange={(e) => {
-              setCategory(e.target.value);
-              setPage(1);
-            }}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none capitalize"
+            onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold"
           >
             <option value="">All Categories</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
+            {categories.map(c => (
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
 
-          <div className="flex items-center gap-1">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-                setPage(1);
-              }}
-              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-            />
-            <span className="text-slate-400 text-xs">to</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                setEndDate(e.target.value);
-                setPage(1);
-              }}
-              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-            />
-          </div>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+            className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+          />
+          <span className="text-slate-400">to</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+            className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+          />
+
+          {(search || category || startDate || endDate) && (
+            <button
+              type="button"
+              onClick={() => { setSearch(''); setCategory(''); setStartDate(''); setEndDate(''); setPage(1); }}
+              className="text-xs text-brand-600 hover:underline font-semibold"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
       {/* Expenses Table */}
-      {isListLoading ? (
-        <div className="py-20 flex justify-center"><Spinner size="lg" /></div>
-      ) : (
-        <>
-          <TableContainer>
-            <Thead>
-              <Tr>
-                <Th isSticky>Date</Th>
-                <Th>Category</Th>
-                <Th>Description</Th>
-                <Th>Amount</Th>
-                <Th>Method</Th>
-                <Th>Vendor</Th>
-                <Th className="text-right">Receipt / Actions</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {expensesData?.data?.length === 0 ? (
-                <Tr>
-                  <Td colSpan={7} className="text-center text-slate-400 py-10">No expenses recorded for this range</Td>
-                </Tr>
-              ) : (
-                expensesData.data.map((exp) => (
-                  <Tr key={exp._id}>
-                    <Td isSticky className="font-bold text-slate-800">{formatDate(exp.date)}</Td>
-                    <Td className="capitalize"><Badge variant="neutral">{exp.category}</Badge></Td>
-                    <Td className="font-medium text-slate-600 truncate max-w-xs">{exp.description}</Td>
-                    <Td className="font-extrabold text-red-600">-{formatCurrency(exp.amount)}</Td>
-                    <Td className="uppercase font-semibold text-slate-500 text-xs">{exp.paymentMethod}</Td>
-                    <Td className="font-semibold text-slate-700 text-xs">{exp.vendor || 'N/A'}</Td>
-                    <Td className="text-right flex items-center justify-end gap-1.5 py-3">
-                      {/* Receipt upload / view indicator */}
-                      {exp.receipt ? (
-                        <a
-                          href={exp.receipt}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-2 rounded-lg hover:bg-slate-100 text-emerald-600 font-bold inline-flex items-center"
-                          title="View receipt attachment"
-                        >
-                          <FileText className="w-4 h-4" />
-                        </a>
-                      ) : (
-                        <label className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer inline-flex items-center">
-                          <Upload className="w-4 h-4" />
-                          <input
-                            type="file"
-                            onChange={(e) => handleReceiptUpload(e, exp._id)}
-                            className="hidden"
-                            accept="image/*,application/pdf"
-                          />
-                        </label>
-                      )}
+      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+        {isListLoading ? (
+          <div className="py-20 text-center"><Spinner size="lg" /></div>
+        ) : expensesList.length === 0 ? (
+          <div className="py-16 text-center text-slate-400 text-xs">No expense records found.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4">Title / Particulars</th>
+                  <th className="py-3 px-4">Vendor</th>
+                  <th className="py-3 px-4">Payment Method</th>
+                  <th className="py-3 px-4 text-right">Amount</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {expensesList.map(exp => (
+                  <tr key={exp._id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="py-3 px-4 text-slate-600 font-mono">
+                      {formatDate(exp.date, false)}
+                    </td>
+
+                    <td className="py-3 px-4">
+                      <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                        {exp.category}
+                      </span>
+                    </td>
+
+                    <td className="py-3 px-4 font-bold text-slate-800">
+                      {exp.title || exp.description}
+                      {exp.notes && <span className="block text-[10px] text-slate-400 font-normal">{exp.notes}</span>}
+                    </td>
+
+                    <td className="py-3 px-4 text-slate-600">
+                      {exp.vendor || '-'}
+                    </td>
+
+                    <td className="py-3 px-4 uppercase text-[10px] font-bold text-slate-500">
+                      {exp.paymentMethod}
+                    </td>
+
+                    <td className="py-3 px-4 text-right font-mono font-black text-red-600 text-sm">
+                      {formatCurrency(exp.amount)}
+                    </td>
+
+                    <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(exp)}
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+                        title="Edit"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 inline" />
+                      </button>
 
                       <button
-                        onClick={() => openFormModal(exp)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
+                        type="button"
                         onClick={() => {
-                          if (window.confirm('Delete expense record?')) {
+                          if (window.confirm('Delete this expense entry?')) {
                             deleteExpenseMutation.mutate(exp._id);
                           }
                         }}
-                        className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 cursor-pointer"
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                        title="Delete"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5 inline" />
                       </button>
-                    </Td>
-                  </Tr>
-                ))
-              )}
-            </Tbody>
-          </TableContainer>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
-          {/* Pagination controls */}
-          {expensesData?.pagination && (
-            <div className="flex justify-between items-center bg-white px-6 py-4.5 border border-slate-200/60 rounded-xl shadow-xs">
-              <span className="text-xs text-slate-500">
-                Showing Page <span className="font-bold text-slate-800">{page}</span> of {expensesData.pagination.pages}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() => setPage(p => Math.min(expensesData.pagination.pages, p + 1))}
-                  disabled={page === expensesData.pagination.pages}
-                  className="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* EXPENSE LOGGER FORM MODAL */}
+      {/* CREATE / EDIT EXPENSE MODAL */}
       <Modal
         isOpen={isFormOpen}
         onClose={closeFormModal}
-        title={editingExpense ? 'Edit Expense Record' : 'Record Operating Cost'}
+        title={editingExpense ? 'Edit Expense' : 'Log Station Expense'}
+        size="md"
       >
-        <form onSubmit={handleFormSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveExpenseMutation.mutate(formData);
+          }}
+          className="flex flex-col gap-4 text-slate-800 text-xs"
+        >
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="expDate" className="block text-xs font-bold text-slate-500 uppercase mb-2">Expense Date</label>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Expense Date</label>
               <input
                 type="date"
-                id="expDate"
-                name="date"
                 value={formData.date}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm"
+                onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                 required
               />
             </div>
+
             <div>
-              <label htmlFor="expCategory" className="block text-xs font-bold text-slate-500 uppercase mb-2">Category</label>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Expense Category</label>
               <select
-                id="expCategory"
-                name="category"
                 value={formData.category}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm bg-white capitalize"
+                onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                required
               >
                 {categories.map(c => (
                   <option key={c} value={c}>{c}</option>
@@ -385,85 +368,85 @@ export const Expenses = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="expAmount" className="block text-xs font-bold text-slate-500 uppercase mb-2">Amount (₹)</label>
-              <input
-                type="number"
-                id="expAmount"
-                name="amount"
-                value={formData.amount}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm font-semibold"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="expMethod" className="block text-xs font-bold text-slate-500 uppercase mb-2">Payment Method</label>
-              <select
-                id="expMethod"
-                name="paymentMethod"
-                value={formData.paymentMethod}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm bg-white"
-              >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI (GPay / PhonePe)</option>
-                <option value="card">Debit / Credit Card</option>
-                <option value="credit">Store Credit</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="expVendor" className="block text-xs font-bold text-slate-500 uppercase mb-2">Vendor / Vendor Name</label>
-              <input
-                type="text"
-                id="expVendor"
-                name="vendor"
-                value={formData.vendor}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="expNotes" className="block text-xs font-bold text-slate-500 uppercase mb-2">Administrative Notes</label>
-              <input
-                type="text"
-                id="expNotes"
-                name="notes"
-                value={formData.notes}
-                onChange={handleFormChange}
-                className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm"
-              />
-            </div>
-          </div>
-
           <div>
-            <label htmlFor="expDesc" className="block text-xs font-bold text-slate-500 uppercase mb-2">Expense Description</label>
-            <textarea
-              id="expDesc"
-              name="description"
-              value={formData.description}
-              onChange={handleFormChange}
-              rows="2"
-              className="w-full px-3.5 py-2 border border-slate-200 rounded-lg text-sm resize-none"
-              placeholder="Provide cost descriptors..."
+            <label className="block font-bold uppercase text-slate-500 mb-1">Title / Description</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value, description: e.target.value }))}
+              placeholder="E.g. 50L Foam wash shampoo can"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
               required
             />
           </div>
 
-          <div className="flex gap-3 justify-end mt-4">
-            <Button type="button" variant="secondary" onClick={closeFormModal}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={saveExpenseMutation.isPending}>
-              Save expense
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Amount (₹)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={formData.amount}
+                onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                placeholder="0.00"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono font-bold"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Payment Method</label>
+              <select
+                value={formData.paymentMethod}
+                onChange={(e) => setFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white capitalize"
+              >
+                <option value="cash">Cash</option>
+                <option value="upi">UPI / GPay</option>
+                <option value="card">Card</option>
+                <option value="bank-transfer">Bank Transfer</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold uppercase text-slate-500 mb-1">Vendor / Shop Name (Optional)</label>
+            <input
+              type="text"
+              value={formData.vendor}
+              onChange={(e) => setFormData(prev => ({ ...prev, vendor: e.target.value }))}
+              placeholder="E.g. Kerala Auto Spares"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block font-bold uppercase text-slate-500 mb-1">Notes (Supports Malayalam)</label>
+            <textarea
+              rows={2}
+              value={formData.notes}
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              placeholder="Additional remarks..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm resize-none"
+            />
+            <MalayalamInputHelper
+              onSelectPhrase={(phrase) => setFormData(prev => ({
+                ...prev,
+                notes: prev.notes ? `${prev.notes}, ${phrase}` : phrase
+              }))}
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={closeFormModal}>Cancel</Button>
+            <Button type="submit" variant="primary" isLoading={saveExpenseMutation.isPending}>
+              Save Expense
             </Button>
           </div>
         </form>
       </Modal>
+
     </div>
   );
 };

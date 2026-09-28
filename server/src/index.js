@@ -9,26 +9,7 @@ const connectDB = require('./config/db');
 const env = require('./config/env');
 const errorHandler = require('./middleware/errorHandler');
 const initQueueSocket = require('./sockets/queueSocket');
-
-// Seed check function
-const seedOwnerAtStartup = async () => {
-  try {
-    const User = require('./models/User');
-    const ownerExists = await User.findOne({ role: 'owner' });
-    if (!ownerExists) {
-      console.log('🌱 Seeding owner account at startup...');
-      await User.create({
-        name: 'AquaClean Owner',
-        mobile: '9539691738',
-        passwordHash: '0000', // Pre-save hook hashes this
-        role: 'owner'
-      });
-      console.log('✅ Owner seeded: mobile=9539691738, PIN=0000');
-    }
-  } catch (error) {
-    console.error('❌ Startup seeding failed:', error.message);
-  }
-};
+const { initBusinessDefaults } = require('./config/initBusinessDefaults');
 
 const app = express();
 const server = http.createServer(app);
@@ -48,18 +29,17 @@ app.set('io', io);
 // Initialize Socket.io rooms & event listeners
 initQueueSocket(io);
 
-// Connect Database
+// Connect Database & initialize defaults for AHAMMED SONS WATER SERVICE
 connectDB().then(() => {
-  seedOwnerAtStartup();
+  initBusinessDefaults();
 });
 
-// Trust proxy for rate limiting behind Render's proxy
-app.set('pi proxy', 1);
+// Trust proxy for rate limiting behind reverse proxies
 app.set('trust proxy', 1);
 
 // Production security and optimization middleware
 app.use(helmet({
-  contentSecurityPolicy: false // Allows unsplash images and external fonts to load cleanly
+  contentSecurityPolicy: false // Allows assets and maps to load cleanly
 }));
 app.use(compression());
 
@@ -77,7 +57,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
 // Health check endpoint
 app.get('/api/v1/health', (req, res) => {
-  res.status(200).json({ status: 'ok', uptime: process.uptime() });
+  res.status(200).json({ status: 'ok', business: 'AHAMMED SONS WATER SERVICE', uptime: process.uptime() });
 });
 
 // Import Routes
@@ -85,6 +65,9 @@ const authRoutes = require('./routes/authRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const vehicleRoutes = require('./routes/vehicleRoutes');
 const washJobRoutes = require('./routes/washJobRoutes');
+const servicePackageRoutes = require('./routes/servicePackageRoutes');
+const vehicleTypeRoutes = require('./routes/vehicleTypeRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const appointmentRoutes = require('./routes/appointmentRoutes');
@@ -101,6 +84,9 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin/customers', customerRoutes);
 app.use('/api/v1/admin/vehicles', vehicleRoutes);
 app.use('/api/v1/admin/jobs', washJobRoutes);
+app.use('/api/v1/admin/services', servicePackageRoutes);
+app.use('/api/v1/admin/vehicle-types', vehicleTypeRoutes);
+app.use('/api/v1/admin/payments', paymentRoutes);
 app.use('/api/v1/admin/invoices', invoiceRoutes);
 app.use('/api/v1/admin/inventory', inventoryRoutes);
 app.use('/api/v1/admin/appointments', appointmentRoutes);
@@ -134,7 +120,7 @@ app.use(errorHandler);
 
 const PORT = env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running in ${env.NODE_ENV} mode on port ${PORT}`);
+  console.log(`🚀 AHAMMED SONS WATER SERVICE Server running in ${env.NODE_ENV} mode on port ${PORT}`);
 });
 
 module.exports = { app, server };

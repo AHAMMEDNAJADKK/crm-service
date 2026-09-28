@@ -1,13 +1,14 @@
 const Expense = require('../models/Expense');
 
 // Get expenses list with pagination, filters, and searches
-const getExpenses = async (req, res) => {
+const getExpenses = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
-    const search = req.query.search || '';
-    const category = req.query.category || '';
+    const search = (req.query.search || '').trim();
+    const category = (req.query.category || '').trim();
+    const paymentMethod = (req.query.paymentMethod || '').trim();
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     const sortBy = req.query.sortBy || 'date';
@@ -15,12 +16,20 @@ const getExpenses = async (req, res) => {
 
     let query = {};
     if (category) {
-      query.category = category;
+      query.category = { $regex: new RegExp(`^${category}$`, 'i') };
+    }
+
+    if (paymentMethod) {
+      query.paymentMethod = paymentMethod;
     }
 
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        query.date.$gte = start;
+      }
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
@@ -30,8 +39,11 @@ const getExpenses = async (req, res) => {
 
     if (search) {
       query.$or = [
+        { expenseId: { $regex: search, $options: 'i' } },
+        { title: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
-        { vendor: { $regex: search, $options: 'i' } }
+        { vendor: { $regex: search, $options: 'i' } },
+        { category: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -41,9 +53,19 @@ const getExpenses = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
+    // Sum matching expenses
+    const sumAgg = await Expense.aggregate([
+      { $match: query },
+      { $group: { _id: null, totalSpent: { $sum: '$amount' } } }
+    ]);
+    const totalSpent = sumAgg[0]?.totalSpent || 0;
+
     res.status(200).json({
       success: true,
       data: expenses,
+      summary: {
+        totalSpent
+      },
       pagination: {
         page,
         limit,
@@ -52,139 +74,163 @@ const getExpenses = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message, code: 500 });
+    next(error);
   }
 };
 
 // Get single expense
-const getExpenseById = async (req, res) => {
+const getExpenseById = async (req, res, next) => {
   try {
     const expense = await Expense.findById(req.params.id);
     if (!expense) {
-      return res.status(404).json({ success: false, error: 'Expense not found', code: 404 });
+      return res.status(404).json({ success: false, error: 'Expense not found' });
     }
     res.status(200).json({ success: true, data: expense });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message, code: 500 });
+    next(error);
   }
 };
 
 // Create expense
-const createExpense = async (req, res) => {
+const createExpense = async (req, res, next) => {
   try {
-    const { date, category, description, amount, paymentMethod, vendor, notes } = req.body;
+    const { date, category, title, description, amount, paymentMethod, vendor, notes } = req.body;
 
-    if (!category || !description || !amount || !paymentMethod) {
+    if (!category || !amount || (!title && !description)) {
       return res.status(400).json({
         success: false,
-        error: 'Category, description, amount, and payment method are required',
-        code: 400
+        error: 'Category, title/description, and amount are required'
       });
     }
 
+    const cleanAmount = parseFloat(amount);
+    if (isNaN(cleanAmount) || cleanAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Amount must be greater than zero' });
+    }
+
+    const descText = (description || title || '').trim();
+    const titleText = (title || description || '').trim();
+
     const expense = await Expense.create({
-      date: date || new Date(),
-      category,
-      description,
-      amount,
-      paymentMethod,
-      vendor,
-      notes,
+      date: date ? new Date(date) : new Date(),
+      category: category.trim(),
+      title: titleText,
+      description: descText,
+      amount: cleanAmount,
+      paymentMethod: (paymentMethod || 'cash').toLowerCase(),
+      vendor: (vendor || '').trim(),
+      notes: (notes || '').trim(),
+      addedBy: req.user?._id || null,
+      addedByName: req.user?.name || 'Admin',
       receipt: null
     });
 
-    res.status(201).json({ success: true, data: expense });
+    res.status(201).json({ success: true, data: expense, message: 'Expense recorded successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message, code: 500 });
+    next(error);
   }
 };
 
 // Update expense
-const updateExpense = async (req, res) => {
+const updateExpense = async (req, res, next) => {
   try {
-    const { date, category, description, amount, paymentMethod, vendor, notes } = req.body;
+    const { date, category, title, description, amount, paymentMethod, vendor, notes } = req.body;
     const expense = await Expense.findById(req.params.id);
 
     if (!expense) {
-      return res.status(404).json({ success: false, error: 'Expense not found', code: 404 });
+      return res.status(404).json({ success: false, error: 'Expense not found' });
     }
 
-    if (date) expense.date = date;
-    if (category) expense.category = category;
-    if (description) expense.description = description;
-    if (amount !== undefined) expense.amount = amount;
-    if (paymentMethod) expense.paymentMethod = paymentMethod;
-    if (vendor !== undefined) expense.vendor = vendor;
-    if (notes !== undefined) expense.notes = notes;
+    if (date) expense.date = new Date(date);
+    if (category) expense.category = category.trim();
+    if (title) expense.title = title.trim();
+    if (description) expense.description = description.trim();
+    if (amount !== undefined) {
+      const clean = parseFloat(amount);
+      if (clean > 0) expense.amount = clean;
+    }
+    if (paymentMethod) expense.paymentMethod = paymentMethod.toLowerCase();
+    if (vendor !== undefined) expense.vendor = vendor.trim();
+    if (notes !== undefined) expense.notes = notes.trim();
 
     await expense.save();
-    res.status(200).json({ success: true, data: expense });
+    res.status(200).json({ success: true, data: expense, message: 'Expense updated successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message, code: 500 });
+    next(error);
   }
 };
 
-// Upload receipt image/PDF
-const uploadExpenseReceipt = async (req, res) => {
+// Delete expense
+const deleteExpense = async (req, res, next) => {
   try {
     const expense = await Expense.findById(req.params.id);
     if (!expense) {
-      return res.status(404).json({ success: false, error: 'Expense not found', code: 404 });
+      return res.status(404).json({ success: false, error: 'Expense not found' });
     }
 
+    await expense.deleteOne();
+    res.status(200).json({ success: true, message: 'Expense deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Upload Receipt for expense
+const uploadReceipt = async (req, res, next) => {
+  try {
     if (!req.file) {
-      return res.status(400).json({ success: false, error: 'No receipt file uploaded', code: 400 });
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) {
+      return res.status(404).json({ success: false, error: 'Expense not found' });
     }
 
     expense.receipt = `/uploads/${req.file.filename}`;
     await expense.save();
 
-    res.status(200).json({
-      success: true,
-      message: 'Receipt uploaded successfully',
-      data: expense.receipt
-    });
+    res.status(200).json({ success: true, data: expense, message: 'Receipt attached successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message, code: 500 });
+    next(error);
   }
 };
 
-// Monthly expense summary grouped by category
-const getExpenseSummary = async (req, res) => {
+// Get Expense summary & category breakdown
+const getExpenseSummary = async (req, res, next) => {
   try {
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+    const { startDate, endDate } = req.query;
+    const match = {};
 
-    const aggregates = await Expense.aggregate([
-      { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
+    if (startDate || endDate) {
+      match.date = {};
+      if (startDate) match.date.$gte = new Date(startDate);
+      if (endDate) match.date.$lte = new Date(endDate);
+    }
+
+    const breakdown = await Expense.aggregate([
+      { $match: match },
       {
         $group: {
           _id: '$category',
-          total: { $sum: '$amount' },
+          totalAmount: { $sum: '$amount' },
           count: { $sum: 1 }
         }
-      }
+      },
+      { $sort: { totalAmount: -1 } }
     ]);
 
-    res.status(200).json({ success: true, data: aggregates });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message, code: 500 });
-  }
-};
+    const totalSpent = breakdown.reduce((sum, b) => sum + b.totalAmount, 0);
 
-// Delete expense
-const deleteExpense = async (req, res) => {
-  try {
-    const expense = await Expense.findById(req.params.id);
-    if (!expense) {
-      return res.status(404).json({ success: false, error: 'Expense not found', code: 404 });
-    }
-
-    await Expense.findByIdAndDelete(req.params.id);
-    res.status(200).json({ success: true, message: 'Expense deleted successfully' });
+    res.status(200).json({
+      success: true,
+      data: {
+        totalSpent,
+        breakdown: breakdown.map(b => ({ category: b._id, totalAmount: b.totalAmount, count: b.count }))
+      }
+    });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message, code: 500 });
+    next(error);
   }
 };
 
@@ -193,7 +239,7 @@ module.exports = {
   getExpenseById,
   createExpense,
   updateExpense,
-  uploadExpenseReceipt,
-  getExpenseSummary,
-  deleteExpense
+  deleteExpense,
+  uploadReceipt,
+  getExpenseSummary
 };

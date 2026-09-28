@@ -59,7 +59,6 @@ const customerSchema = new mongoose.Schema(
 );
 
 // Indexes for fast search
-customerSchema.index({ mobile: 1 });
 customerSchema.index({ name: 'text', nameMalayalam: 'text', place: 'text' });
 
 module.exports = mongoose.model('Customer', customerSchema);

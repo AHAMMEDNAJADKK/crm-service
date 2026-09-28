@@ -5,18 +5,16 @@ import {
   Users,
   Car,
   Droplet,
-  Package,
+  IndianRupee,
   Receipt,
-  CalendarDays,
-  UserCheck,
   TrendingDown,
-  Gauge,
   BarChart3,
   Settings,
   ArrowLeftRight,
-  Sliders,
-  BookOpen,
-  IndianRupee
+  Package,
+  CalendarDays,
+  UserCheck,
+  BookOpen
 } from 'lucide-react';
 import useUiStore from '../../store/uiStore';
 import api from '../../services/api';
@@ -29,47 +27,48 @@ export const AdminSidebar = () => {
     { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Customers', path: '/admin/customers', icon: Users },
     { name: 'Vehicles', path: '/admin/vehicles', icon: Car },
-    { name: 'Wash Jobs', path: '/admin/jobs', icon: Droplet },
-    { name: 'Inventory', path: '/admin/inventory', icon: Package },
-    { name: 'Billing', path: '/admin/billing', icon: Receipt },
-    { name: 'Appointments', path: '/admin/appointments', icon: CalendarDays },
-    { name: 'Staff & Attendance', path: '/admin/staff', icon: UserCheck },
+    { name: "Today's Services", path: '/admin/jobs', icon: Droplet },
+    { name: 'Services & Pricing', path: '/admin/settings/pricing', icon: IndianRupee },
+    { name: 'Payments & Income', path: '/admin/billing', icon: Receipt },
     { name: 'Expenses', path: '/admin/expenses', icon: TrendingDown },
-    { name: 'Fuel Logs', path: '/admin/fuel-logs', icon: Gauge },
-    { name: 'Ledger', path: '/admin/ledger', icon: BookOpen },
     { name: 'Reports', path: '/admin/reports', icon: BarChart3 },
-    { name: 'Pricing Editor', path: '/admin/settings/pricing', icon: IndianRupee },
+    { name: 'Staff', path: '/admin/staff', icon: UserCheck },
     { name: 'Settings', path: '/admin/settings', icon: Settings }
   ];
+
+  const brandName = stationSettings?.stationName || 'AHAMMED SONS WATER SERVICE';
+  const logoUrl = stationSettings?.logoUrl || '/uploads/logo/station-logo.jpg';
 
   return (
     <aside
       className={`bg-slate-900 text-slate-400 min-h-screen flex flex-col transition-all duration-300 ${
         sidebarCollapsed ? 'w-16 md:w-20' : 'w-64'
-      } shrink-0 shadow-lg select-none`}
+      } shrink-0 shadow-xl select-none z-40`}
     >
-      {/* Brand area (Logo / Fallback name) */}
-      <div className="h-16 flex items-center gap-2.5 px-4 border-b border-slate-800 bg-slate-950/40 shrink-0 overflow-hidden">
-        {stationSettings?.logoUrl ? (
-          <img
-            src={`${api.defaults.baseURL || ''}${stationSettings.logoUrl}`}
-            alt="Logo"
-            className="max-h-9 object-contain"
-          />
-        ) : (
-          <div className="p-2 rounded-xl bg-brand-600 text-white shrink-0 flex items-center justify-center">
-            <Droplet className="w-5 h-5 fill-current" />
-          </div>
-        )}
+      {/* Brand area (Logo / Name) */}
+      <div className="h-16 flex items-center gap-3 px-4 border-b border-slate-800 bg-slate-950/60 shrink-0 overflow-hidden">
+        <img
+          src={`${api.defaults.baseURL || ''}${logoUrl}`}
+          alt="AHAMMED SONS Logo"
+          className="h-9 w-9 object-contain shrink-0 rounded bg-slate-900"
+          onError={(e) => {
+            e.target.style.display = 'none';
+          }}
+        />
         {!sidebarCollapsed && (
-          <span className="font-extrabold text-white text-[13px] tracking-wider truncate uppercase transition-all">
-            {stationSettings?.stationName || 'AQUACLEAN'}
-          </span>
+          <div className="flex flex-col overflow-hidden">
+            <span className="font-black text-white text-[11px] tracking-wider truncate uppercase">
+              AHAMMED SONS
+            </span>
+            <span className="text-[9px] text-brand-400 font-bold uppercase tracking-widest truncate">
+              WATER SERVICE
+            </span>
+          </div>
         )}
       </div>
 
       {/* Nav List */}
-      <nav className="flex-1 py-4 overflow-y-auto px-2 flex flex-col gap-1.5">
+      <nav className="flex-1 py-4 overflow-y-auto px-2 flex flex-col gap-1.5 no-scrollbar">
         {links.map((link) => {
           const isActive = location.pathname === link.path;
           const Icon = link.icon;
@@ -80,7 +79,7 @@ export const AdminSidebar = () => {
               to={link.path}
               className={`flex items-center gap-3.5 px-3 py-3 rounded-xl transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-brand-600 text-white font-bold'
+                  ? 'bg-brand-600 text-white font-bold shadow-md shadow-brand-600/30'
                   : 'hover:bg-slate-800 hover:text-slate-200'
               }`}
               style={{ minHeight: '46px' }}
@@ -101,7 +100,7 @@ export const AdminSidebar = () => {
           style={{ minHeight: '44px' }}
         >
           <ArrowLeftRight className="w-5 h-5 shrink-0" />
-          {!sidebarCollapsed && <span className="text-xs font-semibold">Exit CRM Portal</span>}
+          {!sidebarCollapsed && <span className="text-xs font-semibold">Exit to Website</span>}
         </Link>
       </div>
     </aside>

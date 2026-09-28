@@ -4,7 +4,7 @@ const {
   getExpenseById,
   createExpense,
   updateExpense,
-  uploadExpenseReceipt,
+  uploadReceipt,
   getExpenseSummary,
   deleteExpense
 } = require('../controllers/expenseController');
@@ -20,7 +20,7 @@ router.post('/', createExpense);
 router.get('/summary', getExpenseSummary);
 router.get('/:id', getExpenseById);
 router.put('/:id', updateExpense);
-router.post('/:id/receipt', upload.single('receipt'), uploadExpenseReceipt);
+router.post('/:id/receipt', upload.single('receipt'), uploadReceipt);
 router.delete('/:id', deleteExpense);
 
 module.exports = router;

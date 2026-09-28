@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   getCustomers,
+  findByMobile,
   getCustomerById,
   createCustomer,
   updateCustomer,
@@ -14,6 +15,7 @@ const router = express.Router();
 router.use(protect); // Secure all customer routes
 
 router.get('/', getCustomers);
+router.get('/by-mobile/:mobile', findByMobile);
 router.post('/', createCustomer);
 router.get('/:id', getCustomerById);
 router.put('/:id', updateCustomer);

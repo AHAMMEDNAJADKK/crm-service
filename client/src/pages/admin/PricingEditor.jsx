@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, RefreshCw, AlertCircle, HelpCircle, Check, ShieldAlert, Clock } from 'lucide-react';
+import {
+  Save,
+  RefreshCw,
+  AlertCircle,
+  Plus,
+  Edit2,
+  Trash2,
+  Check,
+  IndianRupee,
+  Layers,
+  Car,
+  Sparkles,
+  ToggleLeft,
+  ToggleRight
+} from 'lucide-react';
 
 import api from '../../services/api';
 import useUiStore from '../../store/uiStore';
@@ -8,23 +22,68 @@ import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import Spinner from '../../components/ui/Spinner';
 import Modal from '../../components/ui/Modal';
-import VEHICLE_TYPES from '../../constants/vehicleTypes';
-import WASH_PACKAGES from '../../constants/washPackages';
+import formatCurrency from '../../utils/formatCurrency';
 
 export const PricingEditor = () => {
   const queryClient = useQueryClient();
   const { addToast } = useUiStore();
 
-  const [prices, setPrices] = useState({}); // format: { "vehicleType_washPackage": { price, isNA } }
-  const [dirty, setDirty] = useState({}); // format: { "vehicleType_washPackage": boolean }
+  const [activeTab, setActiveTab] = useState('matrix'); // 'matrix', 'services', 'vehicleTypes'
+
+  // Pricing matrix state: { "vehicleType_washPackage": { price, isNA } }
+  const [prices, setPrices] = useState({});
+  const [dirty, setDirty] = useState({});
   const [isResetOpen, setIsResetOpen] = useState(false);
 
-  // Fetch Pricing Matrix
-  const { data: pricingData, isLoading } = useQuery({
+  // Service modal states
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState(null);
+  const [serviceFormData, setServiceFormData] = useState({
+    name: '',
+    shortName: '',
+    code: '',
+    description: '',
+    basePrice: 0,
+    estimatedDuration: 30,
+    displayOrder: 0
+  });
+
+  // Vehicle type modal states
+  const [isVTypeModalOpen, setIsVTypeModalOpen] = useState(false);
+  const [editingVType, setEditingVType] = useState(null);
+  const [vTypeFormData, setVTypeFormData] = useState({
+    name: '',
+    code: '',
+    category: 'medium',
+    icon: 'Car',
+    displayOrder: 0,
+    description: ''
+  });
+
+  // 1. Fetch Pricing Matrix & Metadata
+  const { data: pricingData, isLoading: isMatrixLoading } = useQuery({
     queryKey: ['adminSettingsPricing'],
     queryFn: async () => {
       const { data } = await api.get('/api/v1/admin/settings/pricing');
       return data;
+    }
+  });
+
+  // 2. Fetch Services
+  const { data: servicesList = [], isLoading: isServicesLoading } = useQuery({
+    queryKey: ['adminAllServices'],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/admin/services');
+      return res.data?.data || [];
+    }
+  });
+
+  // 3. Fetch Vehicle Types
+  const { data: vehicleTypesList = [], isLoading: isVTypesLoading } = useQuery({
+    queryKey: ['adminAllVehicleTypes'],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/admin/vehicle-types');
+      return res.data?.data || [];
     }
   });
 
@@ -34,7 +93,7 @@ export const PricingEditor = () => {
       const initialPrices = {};
       pricingData.data.forEach(p => {
         initialPrices[`${p.vehicleType}_${p.washPackage}`] = {
-          price: p.price === null ? '' : p.price,
+          price: p.price === null || p.price === undefined ? '' : p.price,
           isNA: !!p.isNA
         };
       });
@@ -44,25 +103,26 @@ export const PricingEditor = () => {
   }, [pricingData]);
 
   // Bulk save pricing mutation
-  const saveMutation = useMutation({
+  const saveMatrixMutation = useMutation({
     mutationFn: async (payload) => {
       return await api.put('/api/v1/admin/settings/pricing', payload);
     },
-    onSuccess: (res) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminSettingsPricing'] });
       addToast('Pricing matrix saved successfully!', 'success');
+      setDirty({});
     },
     onError: (err) => {
       addToast(err.response?.data?.error || 'Failed to save prices', 'error');
     }
   });
 
-  // Reset to defaults mutation
-  const resetMutation = useMutation({
+  // Reset prices mutation
+  const resetMatrixMutation = useMutation({
     mutationFn: async () => {
       return await api.put('/api/v1/admin/settings/pricing/reset');
     },
-    onSuccess: (res) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminSettingsPricing'] });
       addToast('Prices restored to system defaults!', 'success');
       setIsResetOpen(false);
@@ -72,10 +132,77 @@ export const PricingEditor = () => {
     }
   });
 
-  const handleCellChange = (vehicleType, washPackage, value) => {
-    const key = `${vehicleType}_${washPackage}`;
-    const cleanVal = value === '' ? '' : parseFloat(value);
-    
+  // Service CRUD Mutations
+  const saveServiceMutation = useMutation({
+    mutationFn: async (payload) => {
+      if (editingService) {
+        return await api.put(`/api/v1/admin/services/${editingService._id}`, payload);
+      }
+      return await api.post('/api/v1/admin/services', payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminAllServices'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSettingsPricing'] });
+      queryClient.invalidateQueries({ queryKey: ['activeServices'] });
+      addToast(editingService ? 'Service updated successfully' : 'Service created successfully', 'success');
+      setIsServiceModalOpen(false);
+      setEditingService(null);
+    },
+    onError: (err) => {
+      addToast(err.response?.data?.error || 'Failed to save service', 'error');
+    }
+  });
+
+  const toggleServiceMutation = useMutation({
+    mutationFn: async (id) => {
+      return await api.patch(`/api/v1/admin/services/${id}/toggle`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminAllServices'] });
+      queryClient.invalidateQueries({ queryKey: ['activeServices'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSettingsPricing'] });
+      addToast('Service status updated', 'success');
+    }
+  });
+
+  // Vehicle Type CRUD Mutations
+  const saveVTypeMutation = useMutation({
+    mutationFn: async (payload) => {
+      if (editingVType) {
+        return await api.put(`/api/v1/admin/vehicle-types/${editingVType._id}`, payload);
+      }
+      return await api.post('/api/v1/admin/vehicle-types', payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminAllVehicleTypes'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSettingsPricing'] });
+      queryClient.invalidateQueries({ queryKey: ['activeVehicleTypes'] });
+      addToast(editingVType ? 'Vehicle category updated' : 'Vehicle category created', 'success');
+      setIsVTypeModalOpen(false);
+      setEditingVType(null);
+    },
+    onError: (err) => {
+      addToast(err.response?.data?.error || 'Failed to save vehicle category', 'error');
+    }
+  });
+
+  const toggleVTypeMutation = useMutation({
+    mutationFn: async (id) => {
+      return await api.patch(`/api/v1/admin/vehicle-types/${id}/toggle`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminAllVehicleTypes'] });
+      queryClient.invalidateQueries({ queryKey: ['activeVehicleTypes'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSettingsPricing'] });
+      addToast('Vehicle category status updated', 'success');
+    }
+  });
+
+  // Handle cell price change
+  const handleCellChange = (vehicleTypeCode, serviceCode, value) => {
+    const key = `${vehicleTypeCode}_${serviceCode}`;
+    const cleanVal = value === '' ? '' : Math.max(0, parseFloat(value));
+
     setPrices(prev => ({
       ...prev,
       [key]: {
@@ -84,281 +211,541 @@ export const PricingEditor = () => {
       }
     }));
 
-    // Mark as dirty
-    const orig = pricingData?.data?.find(d => d.vehicleType === vehicleType && d.washPackage === washPackage);
-    const origPrice = orig ? (orig.price === null ? '' : orig.price) : '';
-    const origIsNA = orig ? !!orig.isNA : false;
-
-    const isChanged = origPrice !== cleanVal;
-    setDirty(prev => ({
-      ...prev,
-      [key]: isChanged
-    }));
+    setDirty(prev => ({ ...prev, [key]: true }));
   };
 
-  const handleNAToggle = (vehicleType, washPackage) => {
-    const key = `${vehicleType}_${washPackage}`;
-    const current = prices[key] || { price: '', isNA: false };
-    const nextIsNA = !current.isNA;
+  // Handle NA Toggle
+  const handleNAToggle = (vehicleTypeCode, serviceCode) => {
+    const key = `${vehicleTypeCode}_${serviceCode}`;
+    const currentNA = prices[key]?.isNA || false;
 
     setPrices(prev => ({
       ...prev,
       [key]: {
-        price: nextIsNA ? '' : 100, // default placeholder on toggle back
-        isNA: nextIsNA
+        ...prev[key],
+        isNA: !currentNA
       }
     }));
 
-    const orig = pricingData?.data?.find(d => d.vehicleType === vehicleType && d.washPackage === washPackage);
-    const origIsNA = orig ? !!orig.isNA : false;
-
-    setDirty(prev => ({
-      ...prev,
-      [key]: origIsNA !== nextIsNA
-    }));
+    setDirty(prev => ({ ...prev, [key]: true }));
   };
 
-  const handleBulkEditColumn = (pkgId) => {
-    const defaultVal = prompt(`Set flat price for ${pkgId.toUpperCase()} wash across all vehicle types (skip N/A cells):`);
-    if (defaultVal === null) return;
-    const flatPrice = parseFloat(defaultVal);
-    if (isNaN(flatPrice) || flatPrice < 0) {
-      alert('Please enter a valid positive number');
-      return;
-    }
-
-    const nextPrices = { ...prices };
-    const nextDirty = { ...dirty };
-
-    VEHICLE_TYPES.forEach(v => {
-      const key = `${v.id}_${pkgId}`;
-      const current = nextPrices[key] || { price: '', isNA: false };
-      
-      if (!current.isNA) {
-        nextPrices[key] = {
-          ...current,
-          price: flatPrice
-        };
-
-        const orig = pricingData?.data?.find(d => d.vehicleType === v.id && d.washPackage === pkgId);
-        const origPrice = orig ? (orig.price === null ? '' : orig.price) : '';
-        nextDirty[key] = origPrice !== flatPrice;
-      }
+  // Submit bulk matrix changes
+  const handleSaveMatrix = () => {
+    const payload = Object.entries(prices).map(([key, val]) => {
+      const [vehicleType, ...rest] = key.split('_');
+      const washPackage = rest.join('_');
+      return {
+        vehicleType,
+        washPackage,
+        price: val.price === '' ? null : parseFloat(val.price),
+        isNA: Boolean(val.isNA)
+      };
     });
 
-    setPrices(nextPrices);
-    setDirty(nextDirty);
-    addToast(`Set flat rate of ₹${flatPrice} for ${pkgId.toUpperCase()}`, 'info');
+    saveMatrixMutation.mutate({ prices: payload });
   };
 
-  const handleSave = () => {
-    const payloadPrices = [];
-    VEHICLE_TYPES.forEach(v => {
-      WASH_PACKAGES.forEach(pkg => {
-        const key = `${v.id}_${pkg.id}`;
-        const cell = prices[key] || { price: '', isNA: false };
-        payloadPrices.push({
-          vehicleType: v.id,
-          washPackage: pkg.id,
-          price: cell.isNA ? null : (parseFloat(cell.price) || 0),
-          isNA: cell.isNA
-        });
-      });
-    });
-
-    saveMutation.mutate({ prices: payloadPrices });
-  };
-
-  const handleResetConfirm = () => {
-    resetMutation.mutate();
-  };
-
-  if (isLoading) {
-    return (
-      <div className="py-20 flex justify-center"><Spinner size="lg" /></div>
-    );
-  }
-
-  // Format last saved timestamp
-  const formatSavedTime = (dateStr) => {
-    if (!dateStr) return 'Never saved';
-    const d = new Date(dateStr);
-    return `Last saved ${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
-  };
-
-  const categories = [
-    { id: 'light', name: 'Light Vehicles (Bicycles, Bikes, Autos)' },
-    { id: 'medium', name: 'Medium Vehicles (Cars, SUVs, Vans)' },
-    { id: 'heavy', name: 'Heavy Machinery (Trucks, Buses, Tankers)' },
-    { id: 'special', name: 'Special Equipment (JCBs, Cranes)' }
-  ];
+  const vehicleTypes = pricingData?.vehicleTypes || vehicleTypesList.filter(v => v.isActive);
+  const servicePackages = pricingData?.servicePackages || servicesList.filter(s => s.isActive);
+  const dirtyCount = Object.values(dirty).filter(Boolean).length;
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-full overflow-hidden">
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto select-none">
       
-      {/* Header Panel */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-            2D Wash Pricing Editor
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Services & Pricing Architecture
           </h1>
-          <p className="text-xs text-slate-400 mt-1">Configure service ticket rates across categories and toggle package availability.</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Configure vehicle categories, service packages, and vehicle-specific service rates.
+          </p>
         </div>
-        
-        <div className="flex items-center gap-2 flex-wrap">
-          {pricingData?.lastSaved && (
-            <span className="text-[11px] text-slate-400 font-semibold mr-2 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" />
-              {formatSavedTime(pricingData.lastSaved)}
-            </span>
+
+        <div className="flex items-center gap-2">
+          {activeTab === 'matrix' && (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Save}
+              isLoading={saveMatrixMutation.isPending}
+              disabled={dirtyCount === 0}
+              onClick={handleSaveMatrix}
+            >
+              {dirtyCount > 0 ? `Save Changes (${dirtyCount})` : 'Save Matrix'}
+            </Button>
           )}
-          <Button
-            onClick={() => setIsResetOpen(true)}
-            variant="secondary"
-            icon={RefreshCw}
-          >
-            Reset Defaults
-          </Button>
-          <Button
-            onClick={handleSave}
-            isLoading={saveMutation.isPending}
-            icon={Save}
-          >
-            Save All Prices
-          </Button>
+
+          {activeTab === 'services' && (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Plus}
+              onClick={() => {
+                setEditingService(null);
+                setServiceFormData({
+                  name: '',
+                  shortName: '',
+                  code: '',
+                  description: '',
+                  basePrice: 0,
+                  estimatedDuration: 30,
+                  displayOrder: servicesList.length + 1
+                });
+                setIsServiceModalOpen(true);
+              }}
+            >
+              Add Service
+            </Button>
+          )}
+
+          {activeTab === 'vehicleTypes' && (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Plus}
+              onClick={() => {
+                setEditingVType(null);
+                setVTypeFormData({
+                  name: '',
+                  code: '',
+                  category: 'medium',
+                  icon: 'Car',
+                  displayOrder: vehicleTypesList.length + 1,
+                  description: ''
+                });
+                setIsVTypeModalOpen(true);
+              }}
+            >
+              Add Category
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Grid Matrix Container */}
-      <div className="bg-white border border-slate-200/60 rounded-2xl shadow-xs overflow-hidden w-full">
-        {/* Responsive Table Wrapper */}
-        <div className="overflow-x-auto w-full max-w-full">
-          <table className="w-full border-collapse text-left min-w-[900px]">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="sticky left-0 bg-slate-50 p-4 text-xs font-bold text-slate-500 uppercase tracking-wider min-w-[200px] border-r border-slate-200 z-10">
-                  Vehicle Category
-                </th>
-                {WASH_PACKAGES.map(pkg => (
-                  <th key={pkg.id} className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center border-r border-slate-100 last:border-0">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <span>{pkg.label}</span>
-                      <button
-                        onClick={() => handleBulkEditColumn(pkg.id)}
-                        className="px-2 py-0.5 rounded bg-brand-50 hover:bg-brand-100 text-brand-700 text-[10px] font-bold cursor-pointer transition-colors"
-                        title={`Apply flat rate for all ${pkg.label} entries`}
-                      >
-                        Bulk Flat
-                      </button>
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {categories.map(cat => {
-                const catVehicles = VEHICLE_TYPES.filter(v => v.category === cat.id);
-                if (catVehicles.length === 0) return null;
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'matrix', label: 'Vehicle Pricing Matrix' },
+          { id: 'services', label: `Service Packages (${servicesList.length})` },
+          { id: 'vehicleTypes', label: `Vehicle Categories (${vehicleTypesList.length})` }
+        ].map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setActiveTab(t.id)}
+            className={`pb-3 px-3 text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === t.id
+                ? 'border-b-2 border-brand-600 text-brand-600'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-                return (
-                  <React.Fragment key={cat.id}>
-                    {/* Weight Group Section Header */}
-                    <tr className="bg-slate-100/50 sticky top-0 z-5">
-                      <td colSpan={WASH_PACKAGES.length + 1} className="p-2.5 font-black text-[10px] text-slate-400 uppercase tracking-widest border-y border-slate-200">
-                        {cat.name}
-                      </td>
+      {/* ===================== TAB 1: PRICING MATRIX ===================== */}
+      {activeTab === 'matrix' && (
+        <div className="space-y-4">
+          {isMatrixLoading ? (
+            <div className="py-20 text-center"><Spinner size="lg" /></div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-900 text-white">
+                      <th className="py-3.5 px-4 sticky left-0 z-20 bg-slate-900 min-w-[150px] font-bold uppercase text-[11px] tracking-wider">
+                        Vehicle Type
+                      </th>
+                      {servicePackages.map(sp => (
+                        <th key={sp.code} className="py-3.5 px-4 min-w-[160px] font-bold uppercase text-[11px] tracking-wider text-center">
+                          <div>{sp.name}</div>
+                          {sp.shortName && <div className="text-[10px] text-slate-400 font-normal mt-0.5">{sp.shortName}</div>}
+                        </th>
+                      ))}
                     </tr>
-
-                    {/* Category Rows */}
-                    {catVehicles.map(v => (
-                      <tr key={v.id} className="hover:bg-slate-50/40 transition-colors">
-                        <td className="sticky left-0 bg-white p-4 font-bold text-slate-700 uppercase border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.02)] z-5">
-                          {v.label}
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {vehicleTypes.map((vt) => (
+                      <tr key={vt.code} className="hover:bg-slate-50/70 transition-colors">
+                        {/* Vehicle Row Header */}
+                        <td className="py-3 px-4 font-bold text-slate-900 sticky left-0 bg-white z-10 border-r border-slate-100 shadow-2xs">
+                          <span className="uppercase tracking-wide">{vt.name}</span>
+                          <span className="block text-[10px] text-slate-400 font-normal uppercase">
+                            {vt.category || 'medium'}
+                          </span>
                         </td>
-                        
-                        {WASH_PACKAGES.map(pkg => {
-                          const key = `${v.id}_${pkg.id}`;
+
+                        {/* Service Rate Cells */}
+                        {servicePackages.map((sp) => {
+                          const key = `${vt.code}_${sp.code}`;
                           const cell = prices[key] || { price: '', isNA: false };
-                          const isDirty = !!dirty[key];
+                          const isDirty = dirty[key];
 
                           return (
-                            <td
-                              key={pkg.id}
-                              className={`p-3 text-center border-r border-slate-100 last:border-0 transition-all ${
-                                cell.isNA ? 'bg-slate-50' : ''
-                              } ${isDirty ? 'bg-amber-50/60' : ''}`}
-                            >
-                              <div className="flex flex-col items-center gap-1.5 justify-center">
-                                {cell.isNA ? (
-                                  <span className="text-slate-400 font-bold text-sm h-8 flex items-center justify-center">—</span>
-                                ) : (
-                                  <div className="relative">
-                                    <span className="absolute left-2.5 top-2 text-slate-400 font-bold">₹</span>
+                            <td key={sp.code} className="py-2.5 px-3 text-center">
+                              {cell.isNA ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleNAToggle(vt.code, sp.code)}
+                                  className="w-full py-1.5 px-2 bg-slate-100 text-slate-400 font-semibold text-xs rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                                  title="Click to enable service for this vehicle type"
+                                >
+                                  N/A (Disabled)
+                                </button>
+                              ) : (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <div className="relative max-w-[120px] w-full">
+                                    <span className="absolute left-2.5 top-2 text-slate-400 font-bold text-xs">₹</span>
                                     <input
                                       type="number"
+                                      min="0"
                                       value={cell.price}
-                                      onChange={(e) => handleCellChange(v.id, pkg.id, e.target.value)}
-                                      className={`w-24 pl-6 pr-2 py-1.5 border rounded-lg text-center font-extrabold focus:outline-none focus:ring-1 ${
-                                        isDirty
-                                          ? 'border-amber-300 text-amber-900 focus:ring-amber-400'
-                                          : 'border-slate-200 text-slate-700 focus:ring-brand-500'
-                                      }`}
+                                      onChange={(e) => handleCellChange(vt.code, sp.code, e.target.value)}
                                       placeholder="0"
-                                      min={0}
+                                      className={`w-full pl-6 pr-2 py-1.5 border rounded-lg text-sm font-mono font-bold text-slate-800 text-right focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all ${
+                                        isDirty
+                                          ? 'border-brand-500 bg-brand-50/40 ring-1 ring-brand-400'
+                                          : 'border-slate-200 bg-slate-50 hover:bg-white'
+                                      }`}
                                     />
                                   </div>
-                                )}
-                                
-                                {/* NA Checkbox */}
-                                <label className="inline-flex items-center gap-1 cursor-pointer select-none">
-                                  <input
-                                    type="checkbox"
-                                    checked={cell.isNA}
-                                    onChange={() => handleNAToggle(v.id, pkg.id)}
-                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 w-3 h-3 cursor-pointer"
-                                  />
-                                  <span className="text-[10px] text-slate-400 font-semibold uppercase">N/A</span>
-                                </label>
-                              </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleNAToggle(vt.code, sp.code)}
+                                    className="p-1 rounded text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                                    title="Mark Not Applicable"
+                                  >
+                                    <span className="text-[10px] font-bold">N/A</span>
+                                  </button>
+                                </div>
+                              )}
                             </td>
                           );
                         })}
                       </tr>
                     ))}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  </tbody>
+                </table>
+              </div>
 
-      {/* CONFIRM RESET MODAL */}
+              {/* Bottom Matrix Action Bar */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+                <span className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-slate-400" />
+                  Type real prices for each vehicle type. Click "N/A" to disable a service for specific vehicles.
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsResetOpen(true)}
+                  >
+                    Reset Defaults
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={Save}
+                    isLoading={saveMatrixMutation.isPending}
+                    disabled={dirtyCount === 0}
+                    onClick={handleSaveMatrix}
+                  >
+                    Save All Rates
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===================== TAB 2: MANAGE SERVICES ===================== */}
+      {activeTab === 'services' && (
+        <div className="space-y-4">
+          {isServicesLoading ? (
+            <div className="py-20 text-center"><Spinner size="lg" /></div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+              <div className="divide-y divide-slate-100">
+                {servicesList.map((svc) => (
+                  <div key={svc._id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-slate-900 text-sm">{svc.name}</span>
+                        {svc.shortName && (
+                          <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-semibold">
+                            {svc.shortName}
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                          svc.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                        }`}>
+                          {svc.isActive ? 'Active' : 'Disabled'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">{svc.description || 'No description provided.'}</p>
+                      <span className="text-[11px] text-slate-400 block font-mono">
+                        Code: {svc.code} • Duration: ~{svc.estimatedDuration} mins
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleServiceMutation.mutate(svc._id)}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer"
+                      >
+                        {svc.isActive ? 'Disable' : 'Enable'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingService(svc);
+                          setServiceFormData({
+                            name: svc.name,
+                            shortName: svc.shortName || '',
+                            code: svc.code,
+                            description: svc.description || '',
+                            basePrice: svc.basePrice || 0,
+                            estimatedDuration: svc.estimatedDuration || 30,
+                            displayOrder: svc.displayOrder || 0
+                          });
+                          setIsServiceModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer"
+                        title="Edit Service"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===================== TAB 3: MANAGE VEHICLE TYPES ===================== */}
+      {activeTab === 'vehicleTypes' && (
+        <div className="space-y-4">
+          {isVTypesLoading ? (
+            <div className="py-20 text-center"><Spinner size="lg" /></div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+              <div className="divide-y divide-slate-100">
+                {vehicleTypesList.map((vt) => (
+                  <div key={vt._id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-slate-900 text-sm uppercase">{vt.name}</span>
+                        <span className="text-[10px] bg-brand-50 text-brand-700 px-2 py-0.5 rounded font-bold uppercase">
+                          {vt.category || 'medium'}
+                        </span>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                          vt.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                        }`}>
+                          {vt.isActive ? 'Active' : 'Disabled'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 block font-mono">
+                        Code: {vt.code} • Display Order: #{vt.displayOrder}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleVTypeMutation.mutate(vt._id)}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer"
+                      >
+                        {vt.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingVType(vt);
+                          setVTypeFormData({
+                            name: vt.name,
+                            code: vt.code,
+                            category: vt.category || 'medium',
+                            icon: vt.icon || 'Car',
+                            displayOrder: vt.displayOrder || 0,
+                            description: vt.description || ''
+                          });
+                          setIsVTypeModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer"
+                        title="Edit Category"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SERVICE MODAL (Add / Edit) */}
+      <Modal
+        isOpen={isServiceModalOpen}
+        onClose={() => setIsServiceModalOpen(false)}
+        title={editingService ? 'Edit Service Package' : 'Add New Service Package'}
+        size="md"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveServiceMutation.mutate(serviceFormData);
+          }}
+          className="flex flex-col gap-4 text-slate-800 text-xs"
+        >
+          <div>
+            <label className="block font-bold uppercase text-slate-500 mb-1">Service Name</label>
+            <input
+              type="text"
+              value={serviceFormData.name}
+              onChange={(e) => setServiceFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="E.g. Full Underbody + Interior + Exterior"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Short Name</label>
+              <input
+                type="text"
+                value={serviceFormData.shortName}
+                onChange={(e) => setServiceFormData(prev => ({ ...prev, shortName: e.target.value }))}
+                placeholder="E.g. Underbody Wash"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Duration (Mins)</label>
+              <input
+                type="number"
+                value={serviceFormData.estimatedDuration}
+                onChange={(e) => setServiceFormData(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold uppercase text-slate-500 mb-1">Description</label>
+            <textarea
+              rows={2}
+              value={serviceFormData.description}
+              onChange={(e) => setServiceFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Service details and cleaning inclusions..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setIsServiceModalOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="primary" isLoading={saveServiceMutation.isPending}>
+              Save Service
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* VEHICLE TYPE MODAL (Add / Edit) */}
+      <Modal
+        isOpen={isVTypeModalOpen}
+        onClose={() => setIsVTypeModalOpen(false)}
+        title={editingVType ? 'Edit Vehicle Category' : 'Add Vehicle Category'}
+        size="md"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveVTypeMutation.mutate(vTypeFormData);
+          }}
+          className="flex flex-col gap-4 text-slate-800 text-xs"
+        >
+          <div>
+            <label className="block font-bold uppercase text-slate-500 mb-1">Category Name</label>
+            <input
+              type="text"
+              value={vTypeFormData.name}
+              onChange={(e) => setVTypeFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="E.g. SUV, Hatchback, Auto, Bike"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Category Tier</label>
+              <select
+                value={vTypeFormData.category}
+                onChange={(e) => setVTypeFormData(prev => ({ ...prev, category: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+              >
+                <option value="light">Light (Bike/Auto)</option>
+                <option value="medium">Medium (Car/Sedan/SUV)</option>
+                <option value="heavy">Heavy (Pickup/Truck)</option>
+                <option value="special">Special</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold uppercase text-slate-500 mb-1">Display Order</label>
+              <input
+                type="number"
+                value={vTypeFormData.displayOrder}
+                onChange={(e) => setVTypeFormData(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setIsVTypeModalOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="primary" isLoading={saveVTypeMutation.isPending}>
+              Save Category
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* RESET MODAL */}
       <Modal
         isOpen={isResetOpen}
         onClose={() => setIsResetOpen(false)}
-        title="Confirm Pricing Reset"
+        title="Reset Pricing Matrix"
+        size="sm"
       >
-        <div className="flex flex-col gap-4">
-          <div className="flex gap-3 text-amber-600 bg-amber-50 border border-amber-200 p-4 rounded-xl text-xs font-semibold leading-relaxed">
-            <ShieldAlert className="w-5 h-5 shrink-0" />
-            <p>Warning: This action will permanently drop all overrides in your pricing grid and reset them to system base rates. Staged dirty cell changes will also be wiped.</p>
-          </div>
-          
-          <div className="flex justify-end gap-2.5 mt-2">
-            <button
-              onClick={() => setIsResetOpen(false)}
-              className="px-4 py-2 border border-slate-200 text-slate-500 hover:bg-slate-50 font-bold rounded-lg text-xs cursor-pointer"
+        <div className="space-y-4 text-xs text-slate-600">
+          <p>Are you sure you want to reset all vehicle rates to system defaults? This will erase any customized price matrix values.</p>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setIsResetOpen(false)}>Cancel</Button>
+            <Button
+              variant="danger"
+              isLoading={resetMatrixMutation.isPending}
+              onClick={() => resetMatrixMutation.mutate()}
             >
-              Cancel
-            </button>
-            <button
-              onClick={handleResetConfirm}
-              className="px-4 py-2 bg-red-650 hover:bg-red-750 text-white font-bold rounded-lg text-xs cursor-pointer"
-            >
-              Confirm Reset
-            </button>
+              Reset to Defaults
+            </Button>
           </div>
         </div>
       </Modal>

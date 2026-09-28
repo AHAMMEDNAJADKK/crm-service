@@ -1,119 +1,211 @@
-const Invoice = require('../models/Invoice');
-const Expense = require('../models/Expense');
 const WashJob = require('../models/WashJob');
+const Payment = require('../models/Payment');
+const Expense = require('../models/Expense');
 const Customer = require('../models/Customer');
-const WaterLog = require('../models/WaterLog');
-const mongoose = require('mongoose');
+const Vehicle = require('../models/Vehicle');
+const Invoice = require('../models/Invoice');
+const ServicePackage = require('../models/ServicePackage');
+const VehicleType = require('../models/VehicleType');
 
-// Helper to parse date ranges
-const getDateRange = (startDate, endDate) => {
-  const start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 30));
-  const end = endDate ? new Date(endDate) : new Date();
+// Helper to get start and end of day in Date objects
+const getDayBounds = (dateStr) => {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const start = new Date(d);
   start.setHours(0, 0, 0, 0);
+  const end = new Date(d);
   end.setHours(23, 59, 59, 999);
   return { start, end };
 };
 
-// 1. Revenue Report (with vehicle type and wash package breakdowns)
-const getRevenueReport = async (startDate, endDate) => {
-  const { start, end } = getDateRange(startDate, endDate);
+// 1. TODAY'S DASHBOARD METRICS
+const getTodayDashboard = async () => {
+  const { start, end } = getDayBounds();
 
-  const invoices = await Invoice.find({
-    createdAt: { $gte: start, $lte: end }
-  }).populate('customerId', 'name mobile');
-
-  const statsAgg = await Invoice.aggregate([
+  // Wash jobs created today
+  const jobsAgg = await WashJob.aggregate([
     { $match: { createdAt: { $gte: start, $lte: end } } },
     {
       $group: {
         _id: null,
-        totalBilled: { $sum: '$grandTotal' },
-        totalCollected: { $sum: { $sum: '$payments.amount' } },
-        count: { $sum: 1 }
+        totalServices: { $sum: 1 },
+        completedServices: {
+          $sum: { $cond: [{ $in: ['$status', ['completed', 'delivered']] }, 1, 0] }
+        },
+        pendingServices: {
+          $sum: { $cond: [{ $not: [{ $in: ['$status', ['completed', 'delivered', 'cancelled']] }] }, 1, 0] }
+        },
+        cancelledServices: {
+          $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] }
+        },
+        totalServiceValue: {
+          $sum: {
+            $cond: [
+              { $ne: ['$status', 'cancelled'] },
+              { $ifNull: ['$finalAmount', '$price'] },
+              0
+            ]
+          }
+        },
+        totalAmountPaidForJobs: {
+          $sum: {
+            $cond: [
+              { $ne: ['$status', 'cancelled'] },
+              { $ifNull: ['$amountPaid', 0] },
+              0
+            ]
+          }
+        }
       }
     }
   ]);
 
-  const stats = statsAgg[0] || { totalBilled: 0, totalCollected: 0, count: 0 };
-  const totalPending = Math.max(0, stats.totalBilled - stats.totalCollected);
-
-  // Group by vehicle type
-  const vTypeAgg = await Invoice.aggregate([
-    { $match: { createdAt: { $gte: start, $lte: end } } },
-    {
-      $group: {
-        _id: '$vehicleType',
-        total: { $sum: '$grandTotal' },
-        count: { $sum: 1 }
-      }
-    }
-  ]);
-
-  // Group by wash package
-  const pkgAgg = await Invoice.aggregate([
-    { $match: { createdAt: { $gte: start, $lte: end } } },
-    {
-      $group: {
-        _id: '$washPackage',
-        total: { $sum: '$grandTotal' },
-        count: { $sum: 1 }
-      }
-    }
-  ]);
-
-  // Daily trends
-  const dailyTrends = await Invoice.aggregate([
-    { $match: { createdAt: { $gte: start, $lte: end } } },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-        amount: { $sum: '$grandTotal' },
-        collected: { $sum: { $sum: '$payments.amount' } }
-      }
-    },
-    { $sort: { _id: 1 } }
-  ]);
-
-  return {
-    summary: {
-      totalRevenue: stats.totalBilled,
-      totalCollected: stats.totalCollected,
-      totalPending,
-      invoiceCount: stats.count
-    },
-    vehicleTypeBreakdown: vTypeAgg.map(v => ({ vehicleType: v._id, total: v.total, count: v.count })),
-    packageBreakdown: pkgAgg.map(p => ({ washPackage: p._id, total: p.total, count: p.count })),
-    dailyTrends: dailyTrends.map(d => ({ date: d._id, amount: d.amount, collected: d.collected })),
-    invoices
+  const jobsData = jobsAgg[0] || {
+    totalServices: 0,
+    completedServices: 0,
+    pendingServices: 0,
+    cancelledServices: 0,
+    totalServiceValue: 0,
+    totalAmountPaidForJobs: 0
   };
-};
 
-// 2. Expense Report
-const getExpenseReport = async (startDate, endDate) => {
-  const { start, end } = getDateRange(startDate, endDate);
-
-  const expenses = await Expense.find({
-    date: { $gte: start, $lte: end }
-  });
-
-  const aggregates = await Expense.aggregate([
+  // Actual payments collected TODAY
+  const paymentsAgg = await Payment.aggregate([
     { $match: { date: { $gte: start, $lte: end } } },
     {
       $group: {
-        _id: '$category',
-        total: { $sum: '$amount' }
+        _id: null,
+        amountCollected: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const amountCollected = paymentsAgg[0]?.amountCollected || 0;
+
+  // Actual expenses incurred TODAY
+  const expensesAgg = await Expense.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: null,
+        totalExpenses: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const totalExpenses = expensesAgg[0]?.totalExpenses || 0;
+
+  // Outstanding = valid service value - actual money paid on those services
+  const outstanding = Math.max(0, Math.round((jobsData.totalServiceValue - jobsData.totalAmountPaidForJobs) * 100) / 100);
+
+  // Net Cash Flow = actual money collected - expenses
+  const netCashFlow = Math.round((amountCollected - totalExpenses) * 100) / 100;
+
+  // Today's active service vehicles list
+  const todayVehicles = await WashJob.find({ createdAt: { $gte: start, $lte: end } })
+    .populate('customerId', 'name nameMalayalam mobile place')
+    .sort({ createdAt: -1 });
+
+  return {
+    today: {
+      totalServices: jobsData.totalServices,
+      completedServices: jobsData.completedServices,
+      pendingServices: jobsData.pendingServices,
+      cancelledServices: jobsData.cancelledServices,
+      totalServiceValue: Math.round(jobsData.totalServiceValue * 100) / 100,
+      amountCollected: Math.round(amountCollected * 100) / 100,
+      outstanding,
+      totalExpenses: Math.round(totalExpenses * 100) / 100,
+      netCashFlow
+    },
+    todayVehicles
+  };
+};
+
+// 2. WEEKLY DASHBOARD METRICS
+const getWeeklyDashboard = async (startDate, endDate) => {
+  let start, end;
+  if (startDate && endDate) {
+    start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+  } else {
+    // Current week (starting Monday)
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    start = new Date(now.setDate(diff));
+    start.setHours(0, 0, 0, 0);
+    end = new Date();
+    end.setHours(23, 59, 59, 999);
+  }
+
+  // Jobs aggregation
+  const jobsAgg = await WashJob.aggregate([
+    { $match: { createdAt: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: null,
+        totalJobs: { $sum: 1 },
+        completedJobs: {
+          $sum: { $cond: [{ $in: ['$status', ['completed', 'delivered']] }, 1, 0] }
+        },
+        totalServiceValue: {
+          $sum: {
+            $cond: [
+              { $ne: ['$status', 'cancelled'] },
+              { $ifNull: ['$finalAmount', '$price'] },
+              0
+            ]
+          }
+        },
+        totalAmountPaidForJobs: {
+          $sum: {
+            $cond: [
+              { $ne: ['$status', 'cancelled'] },
+              { $ifNull: ['$amountPaid', 0] },
+              0
+            ]
+          }
+        }
       }
     }
   ]);
 
-  const categoryBreakdown = aggregates.map(a => ({
-    category: a._id,
-    amount: a.total
-  }));
+  const jobsData = jobsAgg[0] || {
+    totalJobs: 0,
+    completedJobs: 0,
+    totalServiceValue: 0,
+    totalAmountPaidForJobs: 0
+  };
 
-  const totalExpenses = categoryBreakdown.reduce((sum, item) => sum + item.amount, 0);
+  // Payments collected in range
+  const payAgg = await Payment.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: null,
+        totalCollection: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const totalCollection = payAgg[0]?.totalCollection || 0;
 
-  const dailyTrends = await Expense.aggregate([
+  // Expenses in range
+  const expAgg = await Expense.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: null,
+        totalExpenses: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const totalExpenses = expAgg[0]?.totalExpenses || 0;
+
+  const outstanding = Math.max(0, Math.round((jobsData.totalServiceValue - jobsData.totalAmountPaidForJobs) * 100) / 100);
+  const netCashFlow = Math.round((totalCollection - totalExpenses) * 100) / 100;
+
+  // Daily collection trend in week
+  const dailyCollectionTrend = await Payment.aggregate([
     { $match: { date: { $gte: start, $lte: end } } },
     {
       $group: {
@@ -126,107 +218,155 @@ const getExpenseReport = async (startDate, endDate) => {
 
   return {
     summary: {
-      totalExpenses,
-      expenseCount: expenses.length
+      totalJobs: jobsData.totalJobs,
+      completedJobs: jobsData.completedJobs,
+      totalServiceValue: Math.round(jobsData.totalServiceValue * 100) / 100,
+      totalCollection: Math.round(totalCollection * 100) / 100,
+      totalExpenses: Math.round(totalExpenses * 100) / 100,
+      netCashFlow,
+      outstandingAmount: outstanding
     },
-    categoryBreakdown,
-    dailyTrends: dailyTrends.map(d => ({ date: d._id, amount: d.amount })),
-    expenses
+    dailyCollectionTrend: dailyCollectionTrend.map(d => ({ date: d._id, collection: d.amount })),
+    dateRange: { start, end }
   };
 };
 
-// 3. Profit & Loss Report
-const getPLReport = async (startDate, endDate) => {
-  const { start, end } = getDateRange(startDate, endDate);
+// 3. MONTHLY DASHBOARD METRICS
+const getMonthlyDashboard = async (year, month) => {
+  const now = new Date();
+  const targetYear = year ? parseInt(year) : now.getFullYear();
+  const targetMonth = month ? parseInt(month) - 1 : now.getMonth();
 
-  const revenueData = await getRevenueReport(start, end);
-  const expenseData = await getExpenseReport(start, end);
+  const start = new Date(targetYear, targetMonth, 1, 0, 0, 0, 0);
+  const end = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
 
-  const totalRevenue = revenueData.summary.totalRevenue;
-  const totalExpenses = expenseData.summary.totalExpenses;
-  const netProfit = totalRevenue - totalExpenses;
-
-  const trendMap = {};
-  revenueData.dailyTrends.forEach(r => {
-    trendMap[r.date] = { date: r.date, revenue: r.amount, expenses: 0, profit: r.amount };
-  });
-
-  expenseData.dailyTrends.forEach(e => {
-    if (trendMap[e.date]) {
-      trendMap[e.date].expenses = e.amount;
-      trendMap[e.date].profit = trendMap[e.date].revenue - e.amount;
-    } else {
-      trendMap[e.date] = { date: e.date, revenue: 0, expenses: e.amount, profit: -e.amount };
-    }
-  });
-
-  const PLTrends = Object.values(trendMap).sort((a, b) => a.date.localeCompare(b.date));
-
-  return {
-    summary: {
-      totalRevenue,
-      totalExpenses,
-      netProfit,
-      margin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
-    },
-    trends: PLTrends
-  };
-};
-
-// 4. Wash Volume / Job Card TAT Report
-const getJobCardReport = async (startDate, endDate) => {
-  const { start, end } = getDateRange(startDate, endDate);
-
-  const totalJobs = await WashJob.countDocuments({ createdAt: { $gte: start, $lte: end } });
-
-  const statusStats = await WashJob.aggregate([
-    { $match: { createdAt: { $gte: start, $lte: end } } },
-    { $group: { _id: '$status', count: { $sum: 1 } } }
-  ]);
-
-  // Turnaround Time (TAT) in hours for completed jobs
-  const completedJobs = await WashJob.find({
-    status: 'delivered',
-    endTime: { $ne: null },
-    createdAt: { $gte: start, $lte: end }
-  });
-
-  let totalTATHours = 0;
-  completedJobs.forEach(job => {
-    const diffMs = new Date(job.endTime) - new Date(job.createdAt);
-    totalTATHours += diffMs / (1000 * 60 * 60);
-  });
-  const avgTurnaroundHours = completedJobs.length > 0 ? totalTATHours / completedJobs.length : 0;
-
-  // Staff workload performance
-  const staffPerformance = await WashJob.aggregate([
+  // Jobs aggregation
+  const jobsAgg = await WashJob.aggregate([
     { $match: { createdAt: { $gte: start, $lte: end } } },
     {
       $group: {
-        _id: '$assignedStaff',
-        totalJobs: { $sum: 1 },
-        completedJobs: {
+        _id: null,
+        totalServices: { $sum: 1 },
+        completedServices: {
+          $sum: { $cond: [{ $in: ['$status', ['completed', 'delivered']] }, 1, 0] }
+        },
+        totalServiceValue: {
           $sum: {
-            $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0]
+            $cond: [
+              { $ne: ['$status', 'cancelled'] },
+              { $ifNull: ['$finalAmount', '$price'] },
+              0
+            ]
           }
         },
-        revenueGenerated: { $sum: '$price' }
+        totalAmountPaidForJobs: {
+          $sum: {
+            $cond: [
+              { $ne: ['$status', 'cancelled'] },
+              { $ifNull: ['$amountPaid', 0] },
+              0
+            ]
+          }
+        }
       }
     }
   ]);
 
-  const packagePopularity = await WashJob.aggregate([
-    { $match: { createdAt: { $gte: start, $lte: end } } },
-    { $group: { _id: '$washPackage', count: { $sum: 1 } } }
+  const jobsData = jobsAgg[0] || {
+    totalServices: 0,
+    completedServices: 0,
+    totalServiceValue: 0,
+    totalAmountPaidForJobs: 0
+  };
+
+  // Payments collected in month
+  const payAgg = await Payment.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: null,
+        totalCollection: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const totalCollection = payAgg[0]?.totalCollection || 0;
+
+  // Expenses in month
+  const expAgg = await Expense.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: null,
+        totalExpenses: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const totalExpenses = expAgg[0]?.totalExpenses || 0;
+
+  const outstanding = Math.max(0, Math.round((jobsData.totalServiceValue - jobsData.totalAmountPaidForJobs) * 100) / 100);
+  const netCashFlow = Math.round((totalCollection - totalExpenses) * 100) / 100;
+  const avgServiceValue = jobsData.totalServices > 0
+    ? Math.round((jobsData.totalServiceValue / jobsData.totalServices) * 100) / 100
+    : 0;
+
+  // Service distribution
+  const serviceDistribution = await WashJob.aggregate([
+    { $match: { createdAt: { $gte: start, $lte: end }, status: { $ne: 'cancelled' } } },
+    {
+      $group: {
+        _id: { $ifNull: ['$serviceName', '$washPackage'] },
+        count: { $sum: 1 },
+        totalValue: { $sum: { $ifNull: ['$finalAmount', '$price'] } }
+      }
+    },
+    { $sort: { count: -1 } }
   ]);
 
-  // Peak Hour analysis
-  const peakHours = await WashJob.aggregate([
+  // Vehicle type distribution
+  const vehicleTypeDistribution = await WashJob.aggregate([
     { $match: { createdAt: { $gte: start, $lte: end } } },
     {
       $group: {
-        _id: { $hour: '$createdAt' },
+        _id: '$vehicleType',
         count: { $sum: 1 }
+      }
+    },
+    { $sort: { count: -1 } }
+  ]);
+
+  // Payment method distribution
+  const paymentMethodDistribution = await Payment.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: '$paymentMethod',
+        total: { $sum: '$amount' },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { total: -1 } }
+  ]);
+
+  // Expense category distribution
+  const expenseCategoryDistribution = await Expense.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: '$category',
+        total: { $sum: '$amount' },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { total: -1 } }
+  ]);
+
+  // Daily collection trend: Day 1 to Day 30/31
+  const dailyTrendsRaw = await Payment.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+        amount: { $sum: '$amount' }
       }
     },
     { $sort: { _id: 1 } }
@@ -234,150 +374,152 @@ const getJobCardReport = async (startDate, endDate) => {
 
   return {
     summary: {
-      totalJobs,
-      completedJobsCount: completedJobs.length,
-      avgTurnaroundHours
+      totalServices: jobsData.totalServices,
+      totalRevenue: Math.round(jobsData.totalServiceValue * 100) / 100,
+      totalCollection: Math.round(totalCollection * 100) / 100,
+      totalExpenses: Math.round(totalExpenses * 100) / 100,
+      netCashFlow,
+      outstanding,
+      avgServiceValue,
+      mostUsedService: serviceDistribution[0]?._id || 'N/A',
+      mostServicedVehicleType: vehicleTypeDistribution[0]?._id || 'N/A'
     },
-    statusBreakdown: statusStats.map(s => ({ status: s._id, count: s.count })),
-    packageBreakdown: packagePopularity.map(p => ({ washPackage: p._id, count: p.count })),
-    staffPerformance: staffPerformance.map(sp => ({
-      name: sp._id || 'Unassigned',
-      totalJobs: sp.totalJobs,
-      completedJobs: sp.completedJobs,
-      revenueGenerated: sp.revenueGenerated
-    })),
-    peakHours: peakHours.map(ph => ({ hour: ph._id, count: ph.count }))
+    serviceDistribution: serviceDistribution.map(s => ({ name: s._id, count: s.count, totalValue: s.totalValue })),
+    vehicleTypeDistribution: vehicleTypeDistribution.map(v => ({ name: v._id.toUpperCase(), count: v.count })),
+    paymentMethodDistribution: paymentMethodDistribution.map(p => ({ method: p._id.toUpperCase(), total: p.total, count: p.count })),
+    expenseCategoryDistribution: expenseCategoryDistribution.map(e => ({ category: e._id, total: e.total, count: e.count })),
+    dailyCollectionTrend: dailyTrendsRaw.map(d => ({ date: d._id, collection: d.amount })),
+    dateRange: { start, end }
   };
 };
 
-// 5. Water Usage Report
-const getWaterUsageReport = async (startDate, endDate) => {
-  const { start, end } = getDateRange(startDate, endDate);
+// 4. DAILY CLOSING / CASH SUMMARY
+const getDailyClosing = async (dateStr) => {
+  const { start, end } = getDayBounds(dateStr);
 
-  // Sum up litres logged in wash jobs
-  const jobWater = await WashJob.aggregate([
-    { $match: { createdAt: { $gte: start, $lte: end } } },
+  // Payments grouped by method
+  const methodAgg = await Payment.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
     {
       $group: {
-        _id: '$vehicleType',
-        totalLitres: { $sum: '$waterUsedLitres' },
-        avgLitres: { $avg: '$waterUsedLitres' },
+        _id: '$paymentMethod',
+        total: { $sum: '$amount' },
         count: { $sum: 1 }
       }
     }
   ]);
 
-  // Fetch overhead daily logs
-  const logs = await WaterLog.find({
-    date: { $gte: start, $lte: end }
-  }).sort({ date: 1 });
+  const methodTotals = {
+    cash: 0,
+    upi: 0,
+    card: 0,
+    bankTransfer: 0,
+    other: 0
+  };
 
-  const totalLogsLitres = logs.reduce((sum, l) => sum + l.litresUsed, 0);
-  const totalJobLitres = jobWater.reduce((sum, j) => sum + j.totalLitres, 0);
+  let totalCollected = 0;
+  methodAgg.forEach(m => {
+    const key = (m._id || '').toLowerCase();
+    totalCollected += m.total;
+    if (key === 'cash') methodTotals.cash += m.total;
+    else if (key === 'upi') methodTotals.upi += m.total;
+    else if (key === 'card') methodTotals.card += m.total;
+    else if (key === 'bank-transfer' || key === 'bank transfer') methodTotals.bankTransfer += m.total;
+    else methodTotals.other += m.total;
+  });
+
+  // Total expenses today
+  const expAgg = await Expense.aggregate([
+    { $match: { date: { $gte: start, $lte: end } } },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: '$amount' },
+        cashExpenses: {
+          $sum: { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, '$amount', 0] }
+        }
+      }
+    }
+  ]);
+
+  const totalExpenses = expAgg[0]?.total || 0;
+  const cashExpenses = expAgg[0]?.cashExpenses || 0;
+
+  // Expected Physical Cash In Hand = Cash Collections - Cash Expenses
+  const expectedCash = Math.max(0, methodTotals.cash - cashExpenses);
 
   return {
-    summary: {
-      totalWaterUsed: totalJobLitres + totalLogsLitres,
-      jobConsumption: totalJobLitres,
-      overheadConsumption: totalLogsLitres
-    },
-    vehicleTypeWater: jobWater.map(j => ({
-      vehicleType: j._id,
-      totalLitres: j.totalLitres,
-      avgLitres: parseFloat(j.avgLitres.toFixed(1)),
-      count: j.count
-    })),
-    dailyLogs: logs
+    date: start,
+    cashCollections: methodTotals.cash,
+    upiCollections: methodTotals.upi,
+    cardCollections: methodTotals.card,
+    bankCollections: methodTotals.bankTransfer,
+    otherCollections: methodTotals.other,
+    totalCollected: Math.round(totalCollected * 100) / 100,
+    totalExpenses: Math.round(totalExpenses * 100) / 100,
+    cashExpenses: Math.round(cashExpenses * 100) / 100,
+    expectedCash: Math.round(expectedCash * 100) / 100
   };
 };
 
-// 6. Customer spenders
-const getCustomerReport = async (startDate, endDate) => {
-  const { start, end } = getDateRange(startDate, endDate);
-
-  const totalCustomers = await Customer.countDocuments({});
-  const newCustomersCount = await Customer.countDocuments({ createdAt: { $gte: start, $lte: end } });
-
-  // Top spenders
-  const topSpenders = await Invoice.aggregate([
-    { $match: { paymentStatus: 'paid', createdAt: { $gte: start, $lte: end } } },
-    {
-      $group: {
-        _id: '$customerId',
-        totalSpend: { $sum: '$grandTotal' },
-        invoicesCount: { $sum: 1 }
-      }
-    },
-    { $sort: { totalSpend: -1 } },
-    { $limit: 10 }
-  ]);
-
-  const topSpendersList = [];
-  for (const spender of topSpenders) {
-    if (spender._id) {
-      const cust = await Customer.findById(spender._id).select('name mobile email');
-      if (cust) {
-        topSpendersList.push({
-          customerId: spender._id,
-          name: cust.name,
-          mobile: cust.mobile,
-          email: cust.email,
-          totalSpend: spender.totalSpend,
-          invoicesCount: spender.invoicesCount
-        });
-      }
-    }
+// 5. GLOBAL SEARCH (Requirement 20)
+const globalSearch = async (searchTerm) => {
+  if (!searchTerm || !searchTerm.trim()) {
+    return { customers: [], vehicles: [], jobs: [] };
   }
 
-  // Repeat customers count
-  const customerInvoices = await Invoice.aggregate([
-    { $match: { createdAt: { $gte: start, $lte: end } } },
-    {
-      $group: {
-        _id: '$customerId',
-        invoiceCount: { $sum: 1 }
-      }
-    }
+  const clean = searchTerm.trim();
+  const normalized = clean.replace(/[\s\-_.]/g, '').toUpperCase();
+
+  const [customers, vehicles, jobs] = await Promise.all([
+    Customer.find({
+      $or: [
+        { name: { $regex: clean, $options: 'i' } },
+        { nameMalayalam: { $regex: clean, $options: 'i' } },
+        { mobile: { $regex: clean, $options: 'i' } },
+        { alternateMobile: { $regex: clean, $options: 'i' } },
+        { place: { $regex: clean, $options: 'i' } }
+      ]
+    }).limit(10),
+
+    Vehicle.find({
+      $or: [
+        { regNumber: { $regex: clean, $options: 'i' } },
+        { regNumberNormalized: { $regex: normalized, $options: 'i' } }
+      ]
+    }).populate('customerId', 'name nameMalayalam mobile').limit(10),
+
+    WashJob.find({
+      $or: [
+        { tokenNumber: { $regex: clean, $options: 'i' } },
+        { vehicleReg: { $regex: clean, $options: 'i' } },
+        { customerMobile: { $regex: clean, $options: 'i' } }
+      ]
+    }).populate('customerId', 'name nameMalayalam mobile').limit(10)
   ]);
 
-  const repeatCustomersCount = customerInvoices.filter(ci => ci.invoiceCount > 1 && ci._id !== null).length;
-  const singleCustomersCount = customerInvoices.filter(ci => ci.invoiceCount === 1 && ci._id !== null).length;
-
-  return {
-    summary: {
-      totalCustomers,
-      newCustomersCount,
-      repeatCustomersCount,
-      repeatRatio: customerInvoices.length > 0 ? (repeatCustomersCount / customerInvoices.length) * 100 : 0
-    },
-    topSpenders: topSpendersList,
-    customerPurchaseDistribution: [
-      { name: 'Single Purchase', value: singleCustomersCount },
-      { name: 'Repeat Customer', value: repeatCustomersCount }
-    ]
-  };
+  return { customers, vehicles, jobs };
 };
 
+// CSV Export helper
 const exportToCSV = (headers, rows) => {
-  const headerLine = headers.join(',');
-  const rowLines = rows.map(row =>
-    row.map(cell => {
-      const stringified = cell === null || cell === undefined ? '' : String(cell);
-      if (stringified.includes(',') || stringified.includes('"') || stringified.includes('\n')) {
-        return `"${stringified.replace(/"/g, '""')}"`;
-      }
-      return stringified;
-    }).join(',')
-  );
-  return [headerLine, ...rowLines].join('\n');
+  const csvRows = [headers.join(',')];
+  rows.forEach(row => {
+    const escaped = row.map(val => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    });
+    csvRows.push(escaped.join(','));
+  });
+  return csvRows.join('\n');
 };
 
 module.exports = {
-  getRevenueReport,
-  getExpenseReport,
-  getPLReport,
-  getJobCardReport,
-  getWaterUsageReport,
-  getCustomerReport,
+  getTodayDashboard,
+  getWeeklyDashboard,
+  getMonthlyDashboard,
+  getDailyClosing,
+  globalSearch,
   exportToCSV
 };
