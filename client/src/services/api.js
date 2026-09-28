@@ -12,6 +12,15 @@ const api = axios.create({
   withCredentials: true // Ensure HTTP-only cookies are sent/received
 });
 
+// Request interceptor to attach Bearer token for cross-origin resilience
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('crm_auth_token');
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => Promise.reject(error));
+
 // Response interceptor to handle token refresh
 let isRefreshing = false;
 let failedQueue = [];
@@ -55,7 +64,11 @@ api.interceptors.response.use(
 
       try {
         // Attempt to call refresh endpoint
-        await axios.post(`${rawBaseURL}/api/v1/auth/refresh`, {}, { withCredentials: true });
+        const refreshToken = localStorage.getItem('crm_refresh_token');
+        const refreshRes = await axios.post(`${rawBaseURL}/api/v1/auth/refresh`, { refreshToken }, { withCredentials: true });
+        if (refreshRes.data?.data?.token) {
+          localStorage.setItem('crm_auth_token', refreshRes.data.data.token);
+        }
         
         isRefreshing = false;
         processQueue(null);
@@ -67,6 +80,8 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         
         // Clear local storage and redirect if refresh fails
+        localStorage.removeItem('crm_auth_token');
+        localStorage.removeItem('crm_refresh_token');
         console.error('Session expired. Redirecting to login.');
         
         // Redirect to admin login if inside admin area

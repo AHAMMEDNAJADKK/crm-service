@@ -17,7 +17,7 @@ const setCookies = (res, accessToken, refreshToken) => {
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: 15 * 60 * 1000
   });
 
@@ -25,7 +25,7 @@ const setCookies = (res, accessToken, refreshToken) => {
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
 };
@@ -77,7 +77,8 @@ const login = async (req, res) => {
         name: user.name,
         mobile: user.mobile,
         role: user.role,
-        token: accessToken
+        token: accessToken,
+        refreshToken: refreshToken
       }
     });
   } catch (error) {
@@ -123,6 +124,9 @@ const refresh = async (req, res) => {
       const { parseCookies } = require('../middleware/auth');
       const cookies = parseCookies(req.headers.cookie);
       token = cookies.refreshToken;
+    // Also allow body fallback for cross-origin environments where cookies might be suppressed
+    if (!token && req.body?.refreshToken) {
+      token = req.body.refreshToken;
     }
 
     if (!token) {

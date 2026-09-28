@@ -21,9 +21,13 @@ const useAuthStore = create((set) => ({
           isCheckingAuth: false
         });
       } else {
+        localStorage.removeItem('crm_auth_token');
+        localStorage.removeItem('crm_refresh_token');
         set({ user: null, isAuthenticated: false, isCheckingAuth: false });
       }
     } catch (error) {
+      localStorage.removeItem('crm_auth_token');
+      localStorage.removeItem('crm_refresh_token');
       set({ user: null, isAuthenticated: false, isCheckingAuth: false });
     }
   },
@@ -33,8 +37,15 @@ const useAuthStore = create((set) => ({
     try {
       const response = await api.post('/api/v1/auth/login', { mobile, pin });
       if (response.data?.success) {
+        const userData = response.data.data;
+        if (userData?.token) {
+          localStorage.setItem('crm_auth_token', userData.token);
+        }
+        if (userData?.refreshToken) {
+          localStorage.setItem('crm_refresh_token', userData.refreshToken);
+        }
         set({
-          user: response.data.data,
+          user: userData,
           isAuthenticated: true
         });
         return { success: true };
@@ -53,12 +64,13 @@ const useAuthStore = create((set) => ({
     } catch (error) {
       console.error('Logout request failed:', error.message);
     } finally {
+      localStorage.removeItem('crm_auth_token');
+      localStorage.removeItem('crm_refresh_token');
+      localStorage.removeItem('auth-storage');
       set({
         user: null,
         isAuthenticated: false
       });
-      // Clear storage
-      localStorage.removeItem('auth-storage');
     }
   }
 }));
