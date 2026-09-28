@@ -2,6 +2,8 @@
   "name": "ahammed-sons-water-service-crm",
   "private": true,
   "scripts": {
+    "start": "node server.js",
+    "build:server": "npm install --prefix server",
     "server": "node server.js",
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "dev:server": "npm run dev --prefix server",

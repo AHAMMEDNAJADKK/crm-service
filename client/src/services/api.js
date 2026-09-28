@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+// Normalize base URL: strip trailing slashes and redundant /api or /api/v1 prefixes
+let rawBaseURL = (import.meta.env.VITE_API_URL || '').trim();
+rawBaseURL = rawBaseURL.replace(/\/+$/, '').replace(/\/api\/v1$/, '').replace(/\/api$/, '');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '', // Vite proxy maps relative calls starting with /api
+  baseURL: rawBaseURL, // Resolves relative paths or remote backend origin cleanly
   headers: {
     'Content-Type': 'application/json'
   },
@@ -51,7 +55,7 @@ api.interceptors.response.use(
 
       try {
         // Attempt to call refresh endpoint
-        await axios.post('/api/v1/auth/refresh', {}, { withCredentials: true });
+        await axios.post(`${rawBaseURL}/api/v1/auth/refresh`, {}, { withCredentials: true });
         
         isRefreshing = false;
         processQueue(null);
