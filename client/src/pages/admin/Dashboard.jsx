@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Car,
@@ -12,14 +12,15 @@ import {
   Plus,
   Calendar,
   Layers,
-  PieChart,
-  BarChart2,
-  DollarSign,
+  Sparkles,
   ArrowUpRight,
-  ArrowDownRight,
   RefreshCw,
   Eye,
-  FileText
+  FileText,
+  CreditCard,
+  Droplet,
+  Truck,
+  Check
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -29,44 +30,48 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  PieChart as RechartsPie,
-  Pie,
-  Cell,
-  Legend
+  Legend,
+  AreaChart,
+  Area
 } from 'recharts';
 
 import api from '../../services/api';
 import useUiStore from '../../store/uiStore';
+import useAuthStore from '../../store/authStore';
 import formatCurrency from '../../utils/formatCurrency';
 import formatDate from '../../utils/formatDate';
 
 import Button from '../../components/ui/Button';
 import Spinner from '../../components/ui/Spinner';
+import Badge from '../../components/ui/Badge';
 
 import QuickActionsBar from '../../components/common/QuickActionsBar';
-import TodaysVehiclesSection from '../../components/jobs/TodaysVehiclesSection';
 import NewServiceModal from '../../components/jobs/NewServiceModal';
 import QuickPaymentModal from '../../components/payments/QuickPaymentModal';
 import ServiceReceiptModal from '../../components/receipt/ServiceReceiptModal';
 
-const CHART_COLORS = ['#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
-
 export const Dashboard = ({ onOpenNewService }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { addToast, stationSettings } = useUiStore();
 
-  const [activeTab, setActiveTab] = useState('today'); // 'today', 'weekly', 'monthly', 'closing'
+  // Chart range: '7d' or '30d'
+  const [chartRange, setChartRange] = useState('7d');
 
-  // Modal states
+  // Modals state
   const [isInternalNewServiceOpen, setIsInternalNewServiceOpen] = useState(false);
   const [paymentModalJob, setPaymentModalJob] = useState(null);
   const [receiptModalJob, setReceiptModalJob] = useState(null);
 
   const handleOpenNewService = onOpenNewService || (() => setIsInternalNewServiceOpen(true));
 
-  // 1. Fetch Today's Dashboard Stats & Active Vehicles (backend aggregation)
-  const { data: todayData, isLoading: isTodayLoading, refetch: refetchToday } = useQuery({
+  // 1. Fetch unified Today's Dashboard stats & analytics in ONE fast call
+  const {
+    data: dashboardData,
+    isLoading: isDashboardLoading,
+    refetch: refetchDashboard
+  } = useQuery({
     queryKey: ['adminDashboardToday'],
     queryFn: async () => {
       const res = await api.get('/api/v1/admin/reports/today');
@@ -74,34 +79,14 @@ export const Dashboard = ({ onOpenNewService }) => {
     }
   });
 
-  // 2. Fetch Weekly Dashboard Stats
-  const { data: weeklyData, isLoading: isWeeklyLoading } = useQuery({
-    queryKey: ['adminDashboardWeekly'],
-    queryFn: async () => {
-      const res = await api.get('/api/v1/admin/reports/weekly');
-      return res.data?.data;
-    },
-    enabled: activeTab === 'weekly'
-  });
-
-  // 3. Fetch Monthly Dashboard Stats
+  // 2. Fetch Monthly Dashboard stats when chartRange is '30d'
   const { data: monthlyData, isLoading: isMonthlyLoading } = useQuery({
     queryKey: ['adminDashboardMonthly'],
     queryFn: async () => {
       const res = await api.get('/api/v1/admin/reports/monthly');
       return res.data?.data;
     },
-    enabled: activeTab === 'monthly'
-  });
-
-  // 4. Fetch Daily Closing Summary
-  const { data: closingData, isLoading: isClosingLoading } = useQuery({
-    queryKey: ['adminDashboardClosing'],
-    queryFn: async () => {
-      const res = await api.get('/api/v1/admin/reports/daily-closing');
-      return res.data?.data;
-    },
-    enabled: activeTab === 'closing'
+    enabled: chartRange === '30d'
   });
 
   // Quick Complete Job Mutation
@@ -119,47 +104,58 @@ export const Dashboard = ({ onOpenNewService }) => {
     }
   });
 
-  const handleQuickComplete = (job) => {
-    completeMutation.mutate(job._id);
-  };
-
-  const handleQuickPayment = (job) => {
-    setPaymentModalJob(job);
-  };
-
-  const handleViewReceipt = (job) => {
-    setReceiptModalJob(job);
-  };
-
-  const handleManageJob = (job) => {
-    navigate('/admin/jobs');
-  };
-
-  const todayStats = todayData?.today || {
-    totalServices: 0,
-    completedServices: 0,
-    pendingServices: 0,
-    cancelledServices: 0,
-    totalServiceValue: 0,
-    amountCollected: 0,
+  const today = dashboardData?.today || {
+    totalVehicles: 0,
+    serviceValue: 0,
+    collection: 0,
     outstanding: 0,
-    totalExpenses: 0,
-    netCashFlow: 0
+    expenses: 0,
+    todayProfit: 0
   };
 
-  const todayVehicles = todayData?.todayVehicles || [];
+  const month = dashboardData?.month || {
+    totalVehicles: 0,
+    serviceValue: 0,
+    collection: 0,
+    expenses: 0,
+    profit: 0
+  };
+
+  const performanceChartData =
+    chartRange === '7d'
+      ? dashboardData?.performanceChart7d || []
+      : monthlyData?.performanceChart || [];
+
+  const vehiclesByType = dashboardData?.vehiclesByType || [];
+  const servicesBreakdown = dashboardData?.servicesBreakdown || [];
+  const paymentsBreakdown = dashboardData?.paymentsBreakdown || [];
+  const expensesBreakdown = dashboardData?.expensesBreakdown || [];
+  const recentPayments = dashboardData?.recentPayments || [];
+  const outstandingJobs = dashboardData?.outstandingJobs || [];
+  const todayVehicles = dashboardData?.todayVehicles || [];
+
+  // Greeting helper
+  const getGreeting = () => {
+    const hr = new Date().getHours();
+    if (hr < 12) return 'Good Morning';
+    if (hr < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  };
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto select-none pb-12">
-      {/* Top Banner / Mobile Quick Actions */}
+      {/* 1. Header Banner & Quick Actions */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
-              Command Dashboard
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              {getGreeting()}, {user?.name?.split(' ')[0] || 'Owner'}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              {stationSettings?.stationName || 'AHAMMED SONS WATER SERVICE'} • Real-Time Operations
+              <span className="font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">
+                {stationSettings?.stationName || 'AHAMMED SONS WATER SERVICE'}
+              </span>
+              {' '}• Owner Command Dashboard
             </p>
           </div>
 
@@ -168,8 +164,8 @@ export const Dashboard = ({ onOpenNewService }) => {
               variant="outline"
               size="sm"
               icon={RefreshCw}
-              onClick={() => refetchToday()}
-              className="text-xs"
+              onClick={() => refetchDashboard()}
+              className="text-xs font-bold"
             >
               Refresh
             </Button>
@@ -178,477 +174,630 @@ export const Dashboard = ({ onOpenNewService }) => {
               size="sm"
               icon={Plus}
               onClick={handleOpenNewService}
-              className="font-bold text-xs"
+              className="font-black text-xs shadow-md shadow-brand-600/25"
             >
-              New Service
+              + Add Vehicle
             </Button>
           </div>
         </div>
 
-        {/* Mobile Quick Action Buttons Bar */}
+        {/* Action bar */}
         <QuickActionsBar
-          onNewService={handleOpenNewService}
-          onNewCustomer={() => navigate('/admin/customers')}
-          onNewVehicle={() => navigate('/admin/vehicles')}
-          onNewExpense={() => navigate('/admin/expenses')}
-          onViewTodaysVehicles={() => setActiveTab('today')}
+          onAddVehicle={handleOpenNewService}
+          onAddPayment={() => navigate('/admin/billing')}
+          onAddExpense={() => navigate('/admin/expenses')}
+          onViewTodaysServices={() => navigate('/admin/jobs')}
           onViewOutstanding={() => navigate('/admin/outstanding')}
         />
       </div>
 
-      {/* Date Filter Tabs Bar: Today / Weekly / Monthly / Daily Closing */}
-      <div className="flex border-b border-slate-200 dark:border-navy-700 overflow-x-auto gap-2 no-scrollbar">
-        {[
-          { id: 'today', label: "Today's Operations" },
-          { id: 'weekly', label: 'Weekly Summary' },
-          { id: 'monthly', label: 'Monthly Analytics' },
-          { id: 'closing', label: 'Daily Cash Closing' }
-        ].map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setActiveTab(t.id)}
-            className={`pb-3 px-3.5 text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === t.id
-                ? 'border-b-2 border-brand-600 text-brand-600 dark:text-brand-400 dark:border-brand-400'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ===================== TAB 1: TODAY ===================== */}
-      {activeTab === 'today' && (
-        <div className="space-y-6">
-          {/* Top 6 KPI Cards as specified */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-            {/* 1. TODAY'S VEHICLES */}
-            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 p-4 rounded-2xl shadow-xs transition-colors">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Today's Vehicles
-                </span>
-                <Car className="w-4 h-4 text-brand-500" />
-              </div>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono">
-                {todayStats.totalServices}
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Checked-in today</p>
-            </div>
-
-            {/* 2. TODAY'S SERVICES */}
-            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 p-4 rounded-2xl shadow-xs transition-colors">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Today's Services
-                </span>
-                <CheckCircle className="w-4 h-4 text-emerald-500" />
-              </div>
-              <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                {todayStats.completedServices}
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                {todayStats.pendingServices} in progress
-              </p>
-            </div>
-
-            {/* 3. TODAY'S COLLECTION */}
-            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 p-4 rounded-2xl shadow-xs transition-colors">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                  Today's Collection
-                </span>
-                <ArrowUpRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                {formatCurrency(todayStats.amountCollected)}
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Cash + UPI collected</p>
-            </div>
-
-            {/* 4. TODAY'S EXPENSES */}
-            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 p-4 rounded-2xl shadow-xs transition-colors">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Today's Expenses
-                </span>
-                <TrendingDown className="w-4 h-4 text-red-500" />
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-red-600 dark:text-red-400 font-mono">
-                {formatCurrency(todayStats.totalExpenses)}
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Chemicals & wages</p>
-            </div>
-
-            {/* 5. OUTSTANDING */}
-            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 p-4 rounded-2xl shadow-xs transition-colors">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                  Outstanding Due
-                </span>
-                <AlertCircle className="w-4 h-4 text-amber-500" />
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
-                {formatCurrency(todayStats.outstanding)}
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Pending payments</p>
-            </div>
-
-            {/* 6. NET CASH FLOW */}
-            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 p-4 rounded-2xl shadow-xs transition-colors">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-brand-700 dark:text-brand-400">
-                  Net Cash Flow
-                </span>
-                <ArrowUpRight className="w-4 h-4 text-brand-600 dark:text-brand-400" />
-              </div>
-              <div className={`text-xl sm:text-2xl font-black font-mono ${
-                todayStats.netCashFlow >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-red-600'
-              }`}>
-                {formatCurrency(todayStats.netCashFlow)}
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Collection - Expenses</p>
+      {/* 2. Top 8 Colorful KPI Cards (Controlled High-Readability Palette) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-3.5">
+        {/* 1. TODAY'S VEHICLES (Blue) */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Today's Vehicles
+            </span>
+            <div className="p-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+              <Car className="w-3.5 h-3.5" />
             </div>
           </div>
-
-          {/* Prominent Section: TODAY'S SERVICE ACTIVITY (Table on Desktop, Cards on Mobile) */}
-          <TodaysVehiclesSection
-            jobs={todayVehicles}
-            isLoading={isTodayLoading}
-            onQuickComplete={handleQuickComplete}
-            onQuickPayment={handleQuickPayment}
-            onViewReceipt={handleViewReceipt}
-            onManageJob={handleManageJob}
-            onNewService={handleOpenNewService}
-          />
+          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">
+            {today.totalVehicles}
+          </div>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Recorded today</p>
         </div>
-      )}
 
-      {/* ===================== TAB 2: WEEKLY ===================== */}
-      {activeTab === 'weekly' && (
-        <div className="space-y-6">
-          {isWeeklyLoading ? (
-            <div className="py-20 text-center"><Spinner size="lg" /></div>
+        {/* 2. TODAY'S SERVICE VALUE (Indigo) */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+              Service Value
+            </span>
+            <div className="p-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+              <Layers className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white font-mono truncate">
+            {formatCurrency(today.serviceValue)}
+          </div>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Total work value</p>
+        </div>
+
+        {/* 3. TODAY'S COLLECTION (Emerald) */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-emerald-200/60 dark:border-emerald-900/40 shadow-2xs hover:shadow-sm transition-all bg-emerald-50/20 dark:bg-emerald-950/10">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              Collection
+            </span>
+            <div className="p-1 rounded-lg bg-emerald-100/80 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono truncate">
+            {formatCurrency(today.collection)}
+          </div>
+          <p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/60 mt-1 truncate">Actual cash/UPI in</p>
+        </div>
+
+        {/* 4. OUTSTANDING (Amber) */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              Outstanding
+            </span>
+            <div className="p-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
+              <AlertCircle className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-base sm:text-lg font-black text-amber-600 dark:text-amber-400 font-mono truncate">
+            {formatCurrency(today.outstanding)}
+          </div>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Pending payment</p>
+        </div>
+
+        {/* 5. TODAY'S EXPENSES (Rose) */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 dark:text-rose-400">
+              Expenses
+            </span>
+            <div className="p-1 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+              <TrendingDown className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-base sm:text-lg font-black text-rose-600 dark:text-rose-400 font-mono truncate">
+            {formatCurrency(today.expenses)}
+          </div>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Money spent today</p>
+        </div>
+
+        {/* 6. TODAY'S PROFIT (Purple - True Cash Profit) */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-purple-200/60 dark:border-purple-900/40 shadow-2xs hover:shadow-sm transition-all bg-purple-50/20 dark:bg-purple-950/10">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-400">
+              Today's Profit
+            </span>
+            <div className="p-1 rounded-lg bg-purple-100/80 dark:bg-purple-950 text-purple-600 dark:text-purple-400">
+              <Sparkles className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className={`text-base sm:text-lg font-black font-mono truncate ${
+            today.todayProfit >= 0 ? 'text-purple-600 dark:text-purple-400' : 'text-red-600'
+          }`}>
+            {formatCurrency(today.todayProfit)}
+          </div>
+          <p className="text-[10px] text-purple-700/70 dark:text-purple-400/60 mt-1 truncate">Collection - Expense</p>
+        </div>
+
+        {/* 7. THIS MONTH COLLECTION (Cyan) */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
+              This Month
+            </span>
+            <div className="p-1 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400">
+              <Calendar className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-base sm:text-lg font-black text-cyan-700 dark:text-cyan-400 font-mono truncate">
+            {formatCurrency(month.collection)}
+          </div>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">{month.totalVehicles} vehicles</p>
+        </div>
+
+        {/* 8. MONTHLY PROFIT (Violet) */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-violet-700 dark:text-violet-400">
+              Monthly Profit
+            </span>
+            <div className="p-1 rounded-lg bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400">
+              <TrendingUp className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className={`text-base sm:text-lg font-black font-mono truncate ${
+            month.profit >= 0 ? 'text-violet-600 dark:text-violet-400' : 'text-red-600'
+          }`}>
+            {formatCurrency(month.profit)}
+          </div>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Month Net Cash</p>
+        </div>
+      </div>
+
+      {/* 3. Performance Chart: Income vs Expenses vs Profit */}
+      <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase tracking-wider">
+              Business Performance: Income vs Expenses vs Profit
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Visual cash flow breakdown based on real collected revenue and actual recorded expenses.
+            </p>
+          </div>
+
+          {/* Timeframe Toggle Buttons */}
+          <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setChartRange('7d')}
+              className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
+                chartRange === '7d'
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Last 7 Days
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartRange('30d')}
+              className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
+                chartRange === '30d'
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              This Month
+            </button>
+          </div>
+        </div>
+
+        {/* Chart View */}
+        <div className="h-64 sm:h-72 w-full">
+          {isDashboardLoading || (chartRange === '30d' && isMonthlyLoading) ? (
+            <div className="h-full flex items-center justify-center">
+              <Spinner size="md" />
+            </div>
+          ) : performanceChartData.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs">
+              <p>No transactions recorded for this period.</p>
+              <button
+                type="button"
+                onClick={handleOpenNewService}
+                className="mt-2 text-brand-600 font-bold hover:underline"
+              >
+                + Record a service to view live trends
+              </button>
+            </div>
           ) : (
-            <>
-              {/* Weekly KPI Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div className="p-4 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Total Jobs</span>
-                  <span className="text-2xl font-black font-mono text-slate-900 dark:text-white">{weeklyData?.summary?.totalJobs || 0}</span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 block mt-1">{weeklyData?.summary?.completedJobs || 0} Completed</span>
-                </div>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={performanceChartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.2)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#0f172a',
+                    borderColor: '#1e293b',
+                    borderRadius: '0.75rem',
+                    color: '#fff',
+                    fontSize: '12px',
+                    fontWeight: 700
+                  }}
+                  formatter={(value, name) => [
+                    formatCurrency(value),
+                    name === 'collection' ? 'Collection' : name === 'expenses' ? 'Expenses' : 'Net Profit'
+                  ]}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: '11px', fontWeight: 700, paddingTop: '10px' }}
+                />
+                <Bar dataKey="collection" name="Collection" fill="#0284c7" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expenses" name="Expenses" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="profit" name="Net Profit" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
 
-                <div className="p-4 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Weekly Service Value</span>
-                  <span className="text-xl font-black font-mono text-slate-900 dark:text-white">{formatCurrency(weeklyData?.summary?.totalServiceValue || 0)}</span>
-                </div>
+      {/* 4. Compact Analytics Sections: Vehicles by Type & Services Breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Vehicles by Type */}
+        <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+              Vehicles by Category (This Month)
+            </h2>
+            <Link to="/admin/settings/pricing" className="text-xs font-bold text-brand-600 hover:underline">
+              Manage Types
+            </Link>
+          </div>
 
-                <div className="p-4 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl">
-                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase block">Total Collected</span>
-                  <span className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400">{formatCurrency(weeklyData?.summary?.totalCollection || 0)}</span>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl">
-                  <span className="text-[11px] font-bold text-brand-600 dark:text-brand-400 uppercase block">Net Cash Flow</span>
-                  <span className="text-xl font-black font-mono text-brand-600 dark:text-brand-400">{formatCurrency(weeklyData?.summary?.netCashFlow || 0)}</span>
-                </div>
-              </div>
-
-              {/* Weekly Collection Trend Chart */}
-              <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-5 shadow-xs">
-                <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wide mb-4">
-                  Daily Collection Trend (7 Days)
-                </h3>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyData?.dailyCollectionTrend || []}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.2)" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#131e35',
-                          borderColor: '#1e2f50',
-                          borderRadius: '0.75rem',
-                          color: '#fff'
-                        }}
-                        formatter={(value) => [formatCurrency(value), 'Collection']}
+          {vehiclesByType.length === 0 ? (
+            <p className="text-xs text-slate-400 py-6 text-center">No vehicles recorded this month.</p>
+          ) : (
+            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+              {vehiclesByType.map((vt) => {
+                const totalMonthVehicles = month.totalVehicles || 1;
+                const pct = Math.round((vt.count / totalMonthVehicles) * 100);
+                return (
+                  <div key={vt.name} className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-700 dark:text-slate-300">{vt.name}</span>
+                      <span className="text-slate-500 font-mono">
+                        {vt.count} vehicles ({pct}%) • {formatCurrency(vt.totalValue)}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-navy-900 overflow-hidden">
+                      <div
+                        className="h-full bg-brand-500 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, Math.max(8, pct))}%` }}
                       />
-                      <Bar dataKey="collection" fill="#0284c7" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ===================== TAB 3: MONTHLY ANALYTICS ===================== */}
-      {activeTab === 'monthly' && (
-        <div className="space-y-6">
-          {isMonthlyLoading ? (
-            <div className="py-20 text-center"><Spinner size="lg" /></div>
-          ) : (
-            <>
-              {/* Monthly Summary Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div className="p-4 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Total Month Services</span>
-                  <span className="text-2xl font-black font-mono text-slate-900 dark:text-white">{monthlyData?.summary?.totalServices || 0}</span>
-                </div>
-                <div className="p-4 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Monthly Revenue</span>
-                  <span className="text-xl font-black font-mono text-slate-900 dark:text-white">{formatCurrency(monthlyData?.summary?.totalRevenue || 0)}</span>
-                </div>
-                <div className="p-4 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl">
-                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase block">Actual Collections</span>
-                  <span className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400">{formatCurrency(monthlyData?.summary?.totalCollection || 0)}</span>
-                </div>
-                <div className="p-4 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl">
-                  <span className="text-[11px] font-bold text-red-600 dark:text-red-400 uppercase block">Total Expenses</span>
-                  <span className="text-xl font-black font-mono text-red-600 dark:text-red-400">{formatCurrency(monthlyData?.summary?.totalExpenses || 0)}</span>
-                </div>
-              </div>
-
-              {/* 4 Professional Analytics Charts */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 1. Daily Collection Trend */}
-                <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-5 shadow-xs">
-                  <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wide mb-4">
-                    Daily Collections (Month)
-                  </h3>
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyData?.dailyCollectionTrend || []}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.2)" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#131e35',
-                            borderColor: '#1e2f50',
-                            borderRadius: '0.75rem',
-                            color: '#fff'
-                          }}
-                          formatter={(value) => [formatCurrency(value), 'Collection']}
-                        />
-                        <Bar dataKey="collection" fill="#0284c7" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    </div>
                   </div>
-                </div>
-
-                {/* 2. Service Package Distribution */}
-                <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-5 shadow-xs">
-                  <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wide mb-4">
-                    Service Types Breakdown
-                  </h3>
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsPie>
-                        <Pie
-                          data={monthlyData?.serviceDistribution || []}
-                          dataKey="count"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          label={({ name, percent }) => `${name.substring(0, 12)} (${(percent * 100).toFixed(0)}%)`}
-                        >
-                          {(monthlyData?.serviceDistribution || []).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#131e35',
-                            borderColor: '#1e2f50',
-                            borderRadius: '0.75rem',
-                            color: '#fff'
-                          }}
-                        />
-                      </RechartsPie>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* 3. Vehicle Categories Distribution */}
-                <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-5 shadow-xs">
-                  <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wide mb-4">
-                    Vehicle Type Breakdown
-                  </h3>
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyData?.vehicleTypeDistribution || []}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.2)" />
-                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#131e35',
-                            borderColor: '#1e2f50',
-                            borderRadius: '0.75rem',
-                            color: '#fff'
-                          }}
-                        />
-                        <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* 4. Payment Method Distribution */}
-                <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-5 shadow-xs">
-                  <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wide mb-4">
-                    Payment Method Share (Cash vs UPI vs Card)
-                  </h3>
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsPie>
-                        <Pie
-                          data={monthlyData?.paymentMethodDistribution || []}
-                          dataKey="total"
-                          nameKey="method"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          label={({ method, percent }) => `${method} (${(percent * 100).toFixed(0)}%)`}
-                        >
-                          {(monthlyData?.paymentMethodDistribution || []).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[(index + 2) % CHART_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#131e35',
-                            borderColor: '#1e2f50',
-                            borderRadius: '0.75rem',
-                            color: '#fff'
-                          }}
-                          formatter={(value) => [formatCurrency(value), 'Total Amount']}
-                        />
-                      </RechartsPie>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ===================== TAB 4: DAILY CLOSING ===================== */}
-      {activeTab === 'closing' && (
-        <div className="space-y-6">
-          {isClosingLoading ? (
-            <div className="py-20 text-center"><Spinner size="lg" /></div>
-          ) : (
-            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-6 shadow-xs max-w-2xl mx-auto space-y-6">
-              <div className="border-b border-slate-100 dark:border-navy-700 pb-4 text-center sm:text-left">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase">
-                  Daily Closing & Cash Drawer Reconciliation
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  End of day cash drawer balance check for {formatDate(closingData?.date || new Date())}
-                </p>
-              </div>
-
-              {/* Collections breakdown */}
-              <div className="space-y-3 text-sm">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
-                  Collections by Payment Mode
-                </span>
-                
-                <div className="flex justify-between py-2 border-b border-slate-100 dark:border-navy-750">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">Cash Collections</span>
-                  <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(closingData?.cashCollections || 0)}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-100 dark:border-navy-750">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">UPI / GPay Collections</span>
-                  <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(closingData?.upiCollections || 0)}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-100 dark:border-navy-750">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">Card Collections</span>
-                  <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(closingData?.cardCollections || 0)}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-100 dark:border-navy-750">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">Bank Transfer Collections</span>
-                  <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(closingData?.bankCollections || 0)}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-200 dark:border-navy-700 font-bold bg-slate-50 dark:bg-navy-850 px-3 rounded-lg">
-                  <span className="text-slate-900 dark:text-white">Total Collections</span>
-                  <span className="font-mono text-emerald-600 dark:text-emerald-400">{formatCurrency(closingData?.totalCollected || 0)}</span>
-                </div>
-              </div>
-
-              {/* Expense deductions */}
-              <div className="space-y-3 text-sm">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
-                  Day's Expenses
-                </span>
-                <div className="flex justify-between py-2 border-b border-slate-100 dark:border-navy-750">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">Total Expenses Logged</span>
-                  <span className="font-mono font-bold text-red-600 dark:text-red-400">{formatCurrency(closingData?.totalExpenses || 0)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-slate-100 dark:border-navy-750 text-xs text-slate-500 dark:text-slate-400">
-                  <span>Cash Paid for Expenses</span>
-                  <span className="font-mono font-semibold">{formatCurrency(closingData?.cashExpenses || 0)}</span>
-                </div>
-              </div>
-
-              {/* Expected physical cash in hand */}
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase block">
-                    Expected Physical Cash in Drawer
-                  </span>
-                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 block mt-0.5">
-                    (Cash Collections ₹{closingData?.cashCollections || 0} - Cash Expenses ₹{closingData?.cashExpenses || 0})
-                  </span>
-                </div>
-                <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
-                  {formatCurrency(closingData?.expectedCash || 0)}
-                </div>
-              </div>
+                );
+              })}
             </div>
           )}
         </div>
-      )}
 
-      {/* Internal New Service Modal (if triggered locally) */}
+        {/* Services Breakdown */}
+        <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+              Service Breakdown (This Month)
+            </h2>
+            <Link to="/admin/history" className="text-xs font-bold text-brand-600 hover:underline">
+              History
+            </Link>
+          </div>
+
+          {servicesBreakdown.length === 0 ? (
+            <p className="text-xs text-slate-400 py-6 text-center">No services recorded this month.</p>
+          ) : (
+            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+              {servicesBreakdown.map((sb) => {
+                const totalRev = month.serviceValue || 1;
+                const pct = Math.round(((sb.totalValue || 0) / totalRev) * 100);
+                return (
+                  <div key={sb.name} className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{sb.name}</span>
+                      <span className="text-slate-500 font-mono">
+                        {sb.count} services • {formatCurrency(sb.totalValue)}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-navy-900 overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, Math.max(8, pct))}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 5. Payments & Expense Distribution Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Payment Methods */}
+        <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+              Payment Methods Breakdown
+            </h2>
+            <Link to="/admin/billing" className="text-xs font-bold text-brand-600 hover:underline">
+              All Payments
+            </Link>
+          </div>
+
+          {paymentsBreakdown.length === 0 ? (
+            <p className="text-xs text-slate-400 py-6 text-center">No collections recorded this month.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {paymentsBreakdown.map((pm) => (
+                <div
+                  key={pm.method}
+                  className="p-3 rounded-xl bg-slate-50 dark:bg-navy-950/60 border border-slate-200 dark:border-navy-800 text-center"
+                >
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                    {pm.method}
+                  </span>
+                  <span className="text-sm font-black text-slate-900 dark:text-white font-mono block mt-0.5">
+                    {formatCurrency(pm.total)}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">{pm.count} txns</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Expense Categories */}
+        <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+              Expense Categories Breakdown
+            </h2>
+            <Link to="/admin/expenses" className="text-xs font-bold text-rose-600 hover:underline">
+              + Add Expense
+            </Link>
+          </div>
+
+          {expensesBreakdown.length === 0 ? (
+            <p className="text-xs text-slate-400 py-6 text-center">No expenses recorded this month.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-48 overflow-y-auto pr-1">
+              {expensesBreakdown.map((exp) => (
+                <div
+                  key={exp.category}
+                  className="p-3 rounded-xl bg-slate-50 dark:bg-navy-950/60 border border-slate-200 dark:border-navy-800 text-center"
+                >
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block truncate">
+                    {exp.category}
+                  </span>
+                  <span className="text-sm font-black text-rose-600 dark:text-rose-400 font-mono block mt-0.5">
+                    {formatCurrency(exp.total)}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">{exp.count} entries</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 6. Today's Activity / Services Section */}
+      <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-4 sm:p-5 shadow-xs">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900 dark:text-white">
+              Today's Services Activity
+            </h2>
+            <p className="text-xs text-slate-500">Live service log for today.</p>
+          </div>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={Plus}
+            onClick={handleOpenNewService}
+            className="text-xs font-bold"
+          >
+            + Add Vehicle
+          </Button>
+        </div>
+
+        {todayVehicles.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 text-xs">
+            <Car className="w-8 h-8 mx-auto text-slate-300 mb-2 opacity-50" />
+            <p className="font-bold">No vehicles recorded today.</p>
+            <p className="text-[11px] mt-0.5">Click "+ Add Vehicle" to log your first service.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-navy-900/60 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                <tr>
+                  <th className="py-2.5 px-3">Time</th>
+                  <th className="py-2.5 px-3">Vehicle</th>
+                  <th className="py-2.5 px-3">Category</th>
+                  <th className="py-2.5 px-3">Service</th>
+                  <th className="py-2.5 px-3">Amount</th>
+                  <th className="py-2.5 px-3">Payment</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-navy-700">
+                {todayVehicles.map((j) => {
+                  const isPaid = j.paymentStatus === 'paid';
+                  const isPartial = j.paymentStatus === 'partial';
+                  return (
+                    <tr key={j._id} className="hover:bg-slate-50/50 dark:hover:bg-navy-750 transition-colors">
+                      <td className="py-3 px-3 text-slate-400 font-mono whitespace-nowrap">
+                        {new Date(j.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="py-3 px-3 font-black text-slate-900 dark:text-white font-mono uppercase tracking-wider whitespace-nowrap">
+                        {j.vehicleReg}
+                      </td>
+                      <td className="py-3 px-3 uppercase text-slate-600 dark:text-slate-300 font-bold whitespace-nowrap">
+                        {j.vehicleType}
+                      </td>
+                      <td className="py-3 px-3 text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
+                        {j.serviceName || 'General Service'}
+                      </td>
+                      <td className="py-3 px-3 font-black text-slate-900 dark:text-white font-mono whitespace-nowrap">
+                        {formatCurrency(j.finalAmount || j.price)}
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                            isPaid
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                              : isPartial
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                              : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                          }`}
+                        >
+                          {j.paymentStatus}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 capitalize">
+                          {j.status || 'Waiting'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {j.balance > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setPaymentModalJob(j)}
+                              className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px]"
+                            >
+                              + Pay
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setReceiptModalJob(j)}
+                            className="p-1 rounded text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
+                            title="Print / View Receipt"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                          {j.status !== 'completed' && j.status !== 'delivered' && (
+                            <button
+                              type="button"
+                              onClick={() => completeMutation.mutate(j._id)}
+                              className="p-1 rounded text-slate-400 hover:text-emerald-600"
+                              title="Mark Completed"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* 7. Bottom Row: Outstanding Payments & Recent Payments */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Outstanding Receivables */}
+        <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                Outstanding Payments Due
+              </h2>
+              <p className="text-[11px] text-slate-400">Services awaiting customer balance payment.</p>
+            </div>
+            <Link to="/admin/outstanding" className="text-xs font-bold text-amber-600 hover:underline">
+              View All Due
+            </Link>
+          </div>
+
+          {outstandingJobs.length === 0 ? (
+            <p className="text-xs text-slate-400 py-6 text-center">No outstanding balances pending. All clear!</p>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-navy-700">
+              {outstandingJobs.map((j) => (
+                <div key={j._id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white font-mono uppercase tracking-wider block">
+                      {j.vehicleReg}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Total: {formatCurrency(j.finalAmount)} • Paid: {formatCurrency(j.amountPaid)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <span className="font-black text-amber-600 dark:text-amber-400 font-mono block">
+                        {formatCurrency(j.balance)} Due
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentModalJob(j)}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-black text-[11px]"
+                    >
+                      + Pay
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Collections */}
+        <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                Recent Collections
+              </h2>
+              <p className="text-[11px] text-slate-400">Latest payment transactions recorded.</p>
+            </div>
+            <Link to="/admin/billing" className="text-xs font-bold text-brand-600 hover:underline">
+              View All
+            </Link>
+          </div>
+
+          {recentPayments.length === 0 ? (
+            <p className="text-xs text-slate-400 py-6 text-center">No recent payments logged.</p>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-navy-700">
+              {recentPayments.map((p) => (
+                <div key={p._id || p.paymentId} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white font-mono uppercase tracking-wider block">
+                      {p.vehicleReg || 'General Payment'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {new Date(p.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} • {p.paymentMethod?.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-emerald-600 dark:text-emerald-400 font-mono block">
+                      +{formatCurrency(p.amount)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Internal Modals */}
       {isInternalNewServiceOpen && (
         <NewServiceModal
+          isOpen={isInternalNewServiceOpen}
           onClose={() => setIsInternalNewServiceOpen(false)}
-          onSuccess={() => {
-            setIsInternalNewServiceOpen(false);
-            refetchToday();
-          }}
+          onSuccess={() => setIsInternalNewServiceOpen(false)}
         />
       )}
 
-      {/* Quick Payment Modal */}
       {paymentModalJob && (
         <QuickPaymentModal
+          isOpen={!!paymentModalJob}
           job={paymentModalJob}
           onClose={() => setPaymentModalJob(null)}
           onSuccess={() => {
             setPaymentModalJob(null);
-            refetchToday();
+            refetchDashboard();
           }}
         />
       )}
 
-      {/* Service Receipt Modal */}
       {receiptModalJob && (
         <ServiceReceiptModal
+          isOpen={!!receiptModalJob}
           job={receiptModalJob}
           onClose={() => setReceiptModalJob(null)}
         />

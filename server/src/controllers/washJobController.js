@@ -75,36 +75,47 @@ exports.createWashJob = async (req, res, next) => {
   try {
     const {
       vehicleReg,
+      vehicleNumber,
+      vehicleName,
       vehicleType,
       washPackage,
+      serviceType,
+      amount,
+      price,
+      priceOverride,
       customerName,
       customerMalayalam,
       customerMobile,
       assignedStaff,
       notes,
-      priceOverride,
       discount = 0,
       additionalCharge = 0,
-      initialPayment = 0,
+      initialPayment,
+      amountPaid: directAmountPaid,
+      paymentChoice = 'paid', // 'paid', 'partial', 'unpaid'
       paymentMethod = 'cash'
     } = req.body;
 
-    if (!vehicleReg || !vehicleType || !washPackage) {
-      return res.status(400).json({ success: false, error: 'Vehicle registration, vehicle type, and service are required' });
+    const rawVehicle = vehicleReg || vehicleNumber || vehicleName;
+    if (!rawVehicle || !vehicleType) {
+      return res.status(400).json({
+        success: false,
+        error: 'Vehicle number or name and vehicle category are required'
+      });
     }
 
-    const regUpper = vehicleReg.trim().toUpperCase();
+    const regUpper = rawVehicle.trim().toUpperCase();
     const regNormalized = normalizeReg(regUpper);
 
-    // 1. Find or create customer
+    // 1. Find or create customer (Completely OPTIONAL)
     let customerId = null;
-    let resolvedCustomerName = customerName || '';
+    let resolvedCustomerName = customerName ? customerName.trim() : 'Walk-in';
     if (customerMobile && customerMobile.trim()) {
       const cleanMobile = customerMobile.trim();
       let cust = await Customer.findOne({ mobile: cleanMobile });
       if (!cust) {
         cust = await Customer.create({
-          name: customerName || 'Walk-in Customer',
+          name: customerName ? customerName.trim() : 'Walk-in Customer',
           nameMalayalam: customerMalayalam || '',
           mobile: cleanMobile
         });
@@ -116,7 +127,7 @@ exports.createWashJob = async (req, res, next) => {
       resolvedCustomerName = cust.name;
     }
 
-    // 2. Find or create vehicle
+    // 2. Find or create vehicle record
     let veh = await Vehicle.findOne({
       $or: [
         { regNumber: regUpper },
@@ -137,30 +148,39 @@ exports.createWashJob = async (req, res, next) => {
       }
     }
 
-    // 3. Determine Service Price
+    // 3. Determine Service Package & Pricing
+    const resolvedPackageCode = (washPackage || serviceType || 'general-wash').toLowerCase();
     let basePrice = 0;
-    const priceDoc = await WashPackagePrice.findOne({
-      vehicleType: vehicleType.toLowerCase(),
-      washPackage: washPackage.toLowerCase()
-    });
+    let priceDoc = null;
 
-    if (priceDoc && priceDoc.price !== null) {
-      basePrice = priceDoc.price;
-    } else {
-      const svc = await ServicePackage.findOne({ code: washPackage.toLowerCase() });
-      if (svc) basePrice = svc.basePrice || 0;
-    }
-
-    // Custom override if provided
-    if (priceOverride !== undefined && priceOverride !== null && priceOverride !== '') {
+    // Direct owner-entered amount takes absolute priority
+    if (amount !== undefined && amount !== null && amount !== '') {
+      basePrice = Math.max(0, parseFloat(amount));
+    } else if (priceOverride !== undefined && priceOverride !== null && priceOverride !== '') {
       basePrice = Math.max(0, parseFloat(priceOverride));
+    } else if (price !== undefined && price !== null && price !== '') {
+      basePrice = Math.max(0, parseFloat(price));
+    } else {
+      // Lookup suggested price in pricing matrix
+      priceDoc = await WashPackagePrice.findOne({
+        vehicleType: vehicleType.toLowerCase(),
+        washPackage: resolvedPackageCode
+      });
+      if (priceDoc && priceDoc.price !== null) {
+        basePrice = priceDoc.price;
+      } else {
+        const svc = await ServicePackage.findOne({ code: resolvedPackageCode });
+        if (svc) basePrice = svc.basePrice || 0;
+      }
     }
 
-    // Get Service Name for display
-    let serviceName = washPackage;
-    const svcDoc = await ServicePackage.findOne({ code: washPackage.toLowerCase() });
+    // Resolve human-friendly Service Name
+    let serviceName = 'General Service';
+    const svcDoc = await ServicePackage.findOne({ code: resolvedPackageCode });
     if (svcDoc) {
       serviceName = svcDoc.name;
+    } else if (washPackage || serviceType) {
+      serviceName = (washPackage || serviceType).replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
 
     const cleanBase = Math.max(0, parseFloat(basePrice) || 0);
@@ -168,7 +188,17 @@ exports.createWashJob = async (req, res, next) => {
     const cleanDisc = Math.max(0, parseFloat(discount) || 0);
     const finalAmount = Math.max(0, Math.round((cleanBase + cleanAdd - cleanDisc) * 100) / 100);
 
-    const paidAmount = Math.min(finalAmount, Math.max(0, parseFloat(initialPayment) || 0));
+    // Calculate Payment and Balance
+    let paidAmount = 0;
+    if (paymentChoice === 'paid') {
+      paidAmount = finalAmount;
+    } else if (paymentChoice === 'unpaid') {
+      paidAmount = 0;
+    } else {
+      const explicitPaid = directAmountPaid !== undefined ? directAmountPaid : (req.body.directAmountPaid !== undefined ? req.body.directAmountPaid : (req.body.paymentAmount !== undefined ? req.body.paymentAmount : initialPayment));
+      paidAmount = Math.min(finalAmount, Math.max(0, parseFloat(explicitPaid) || 0));
+    }
+
     const balance = Math.max(0, Math.round((finalAmount - paidAmount) * 100) / 100);
 
     let paymentStatus = 'unpaid';
@@ -185,7 +215,7 @@ exports.createWashJob = async (req, res, next) => {
       customerId,
       customerName: resolvedCustomerName,
       customerMobile: customerMobile || '',
-      washPackage: washPackage.toLowerCase(),
+      washPackage: resolvedPackageCode,
       serviceName,
       servicePrice: cleanBase,
       price: cleanBase,
@@ -242,7 +272,7 @@ exports.createWashJob = async (req, res, next) => {
         customerId,
         vehicleReg: regUpper,
         vehicleType,
-        washPackage,
+        washPackage: resolvedPackageCode,
         amount: cleanBase,
         taxRate: 0,
         taxAmount: 0,

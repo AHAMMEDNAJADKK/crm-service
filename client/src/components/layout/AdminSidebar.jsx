@@ -53,10 +53,10 @@ export const AdminSidebar = ({ onOpenNewService }) => {
     },
     {
       type: 'section',
-      title: 'Operations',
+      title: 'Services',
       items: [
         {
-          name: 'New Service',
+          name: 'Add Service',
           icon: PlusCircle,
           action: () => {
             if (onOpenNewService) onOpenNewService();
@@ -70,45 +70,29 @@ export const AdminSidebar = ({ onOpenNewService }) => {
     },
     {
       type: 'section',
-      title: 'Customers',
-      items: [
-        { name: 'Customers', path: '/admin/customers', icon: Users },
-        { name: 'Vehicles', path: '/admin/vehicles', icon: Car }
-      ]
-    },
-    {
-      type: 'section',
-      title: 'Services',
-      items: [
-        { name: 'Service Types', path: '/admin/settings/pricing?tab=services', icon: Sparkles },
-        { name: 'Vehicle Types', path: '/admin/settings/pricing?tab=vehicleTypes', icon: Layers },
-        { name: 'Service Pricing', path: '/admin/settings/pricing?tab=matrix', icon: IndianRupee }
-      ]
-    },
-    {
-      type: 'section',
-      title: 'Accounts',
+      title: 'Payments',
       items: [
         { name: 'Payments', path: '/admin/billing', icon: Receipt },
-        { name: 'Income', path: '/admin/reports?tab=income', icon: TrendingUp },
-        { name: 'Expenses', path: '/admin/expenses', icon: TrendingDown },
         { name: 'Outstanding', path: '/admin/outstanding', icon: AlertCircle }
       ]
     },
     {
-      type: 'section',
-      title: 'Reports',
-      items: [
-        { name: 'Daily Closing', path: '/admin/reports?tab=closing', icon: Calendar },
-        { name: 'Income Report', path: '/admin/reports?tab=income', icon: TrendingUp },
-        { name: 'Expense Report', path: '/admin/reports?tab=expense', icon: TrendingDown },
-        { name: 'Outstanding Due', path: '/admin/reports?tab=outstanding', icon: AlertCircle }
-      ]
+      type: 'single',
+      name: 'Expenses',
+      path: '/admin/expenses',
+      icon: TrendingDown
+    },
+    {
+      type: 'single',
+      name: 'Reports',
+      path: '/admin/reports',
+      icon: BarChart3
     },
     {
       type: 'section',
-      title: 'Settings',
+      title: 'Configuration',
       items: [
+        { name: 'Pricing & Vehicle Types', path: '/admin/settings/pricing', icon: Layers },
         { name: 'Business Settings', path: '/admin/settings', icon: Settings }
       ]
     }
