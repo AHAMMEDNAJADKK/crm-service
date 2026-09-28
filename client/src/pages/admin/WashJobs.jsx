@@ -36,6 +36,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import Modal from '../../components/ui/Modal';
 import { TableContainer, Thead, Tbody, Tr, Th, Td } from '../../components/ui/Table';
+import NewServiceModal from '../../components/jobs/NewServiceModal';
 
 const DraggableCard = ({ job, onClick }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -146,13 +147,17 @@ export const WashJobs = () => {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
 
-  // Focus from URL redirect (e.g. tracking / billing redirects)
+  // Focus from URL redirect (e.g. tracking / billing redirects / action=new)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const id = params.get('id');
+    const action = params.get('action');
     if (id) {
       setSelectedJobId(id);
       setIsEditorOpen(true);
+      navigate('/admin/jobs', { replace: true });
+    } else if (action === 'new') {
+      setIsCreatorOpen(true);
       navigate('/admin/jobs', { replace: true });
     }
   }, [location.search, navigate]);
@@ -811,6 +816,18 @@ export const WashJobs = () => {
           </div>
         ) : null}
       </Modal>
+
+      {/* New Service Creation Modal */}
+      {isCreatorOpen && (
+        <NewServiceModal
+          onClose={() => setIsCreatorOpen(false)}
+          onSuccess={() => {
+            setIsCreatorOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['adminWashJobs'] });
+            queryClient.invalidateQueries({ queryKey: ['adminDashboardToday'] });
+          }}
+        />
+      )}
 
     </div>
   );

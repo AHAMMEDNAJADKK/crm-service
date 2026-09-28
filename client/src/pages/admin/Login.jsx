@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Phone, Wrench, ShieldAlert } from 'lucide-react';
+import { Lock, Phone, ShieldCheck, Droplet } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useUiStore from '../../store/uiStore';
+import api from '../../services/api';
 import Button from '../../components/ui/Button';
 
 export const Login = () => {
@@ -12,7 +13,7 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   
   const { login, isAuthenticated } = useAuthStore();
-  const { addToast } = useUiStore();
+  const { addToast, stationSettings } = useUiStore();
   const navigate = useNavigate();
 
   // Redirect if already authenticated
@@ -27,12 +28,12 @@ export const Login = () => {
     setError('');
 
     if (!mobile || !pin) {
-      setError('Please enter both mobile number and PIN');
+      setError('Please enter both registered mobile number and PIN');
       return;
     }
 
     if (pin.length !== 4 || isNaN(pin)) {
-      setError('PIN must be a 4-digit number');
+      setError('Security PIN must be a 4-digit number');
       return;
     }
 
@@ -41,7 +42,7 @@ export const Login = () => {
     setLoading(false);
 
     if (result.success) {
-      addToast('Welcome back, Station Owner!', 'success');
+      addToast('Welcome back to AHAMMED SONS WATER SERVICE CRM!', 'success');
       navigate('/admin/dashboard');
     } else {
       setError(result.error || 'Invalid credentials');
@@ -49,29 +50,45 @@ export const Login = () => {
     }
   };
 
+  const logoUrl = stationSettings?.logoUrl || '/uploads/logo/station-logo.jpg';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 sm:px-6 py-12 relative overflow-hidden select-none">
-      {/* Decorative backdrop gradients */}
-      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-brand-700/10 blur-[120px] -z-10" />
-      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-indigo-700/10 blur-[120px] -z-10" />
+    <div className="min-h-screen flex items-center justify-center bg-navy-950 px-4 sm:px-6 py-12 relative overflow-hidden select-none">
+      {/* Decorative navy/water backdrop gradients */}
+      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-brand-600/10 blur-[130px] -z-10" />
+      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-cyan-600/10 blur-[130px] -z-10" />
 
       <div className="max-w-md w-full flex flex-col items-center">
-        {/* Branding */}
-        <div className="flex items-center gap-2 text-white mb-8">
-          <div className="p-2.5 rounded-xl bg-brand-600 shadow-lg shadow-brand-500/20">
-            <Wrench className="w-6 h-6" />
+        {/* Official Station Branding */}
+        <div className="flex flex-col items-center gap-3 text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl bg-navy-900 border border-navy-750 flex items-center justify-center p-2 shadow-xl shadow-black/40">
+            <img
+              src={`${api.defaults.baseURL || ''}${logoUrl}`}
+              alt="AHAMMED SONS Logo"
+              className="w-full h-full object-contain"
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
           </div>
-          <span className="font-extrabold text-xl tracking-wider uppercase">AUTOCARE</span>
+          <div>
+            <span className="font-black text-lg text-white tracking-wider uppercase block">
+              AHAMMED SONS WATER SERVICE
+            </span>
+            <span className="text-[10px] text-brand-400 font-extrabold uppercase tracking-widest block mt-0.5">
+              INTERNAL CRM & BUSINESS MANAGEMENT
+            </span>
+          </div>
         </div>
 
         {/* Login Card */}
-        <div className="bg-slate-800/80 border border-slate-700/50 rounded-3xl p-8 shadow-2xl backdrop-blur-md w-full">
-          <div className="text-center mb-8">
-            <h2 className="text-xl font-bold text-white flex items-center justify-center gap-1.5">
-              <ShieldAlert className="w-5 h-5 text-brand-500" />
-              Owner Console
+        <div className="bg-navy-900/90 border border-navy-750 rounded-3xl p-8 shadow-2xl backdrop-blur-md w-full">
+          <div className="text-center mb-7">
+            <h2 className="text-lg font-black text-white flex items-center justify-center gap-2 uppercase tracking-wide">
+              <ShieldCheck className="w-5 h-5 text-brand-400" />
+              Sign In to Station Console
             </h2>
-            <p className="text-xs text-slate-400 mt-2">Enter credentials to access dashboards</p>
+            <p className="text-xs text-slate-400 mt-1.5">
+              Enter registered mobile and security PIN to access CRM
+            </p>
           </div>
 
           {error && (
@@ -80,10 +97,12 @@ export const Login = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* Mobile number */}
             <div>
-              <label htmlFor="mobile" className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Registered Mobile</label>
+              <label htmlFor="mobile" className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">
+                Registered Mobile
+              </label>
               <div className="relative">
                 <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
                 <input
@@ -91,8 +110,8 @@ export const Login = () => {
                   id="mobile"
                   value={mobile}
                   onChange={(e) => setMobile(e.target.value)}
-                  placeholder="Enter 10-digit number"
-                  className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-900 border border-slate-700/80 text-sm text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-600"
+                  placeholder="9539691738"
+                  className="w-full pl-11 pr-4 py-3 rounded-xl bg-navy-950 border border-navy-700 text-sm text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-600 font-medium"
                   required
                 />
               </div>
@@ -100,7 +119,9 @@ export const Login = () => {
 
             {/* 4-digit PIN */}
             <div>
-              <label htmlFor="pin" className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">4-Digit Security PIN</label>
+              <label htmlFor="pin" className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">
+                4-Digit Security PIN
+              </label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
                 <input
@@ -110,7 +131,7 @@ export const Login = () => {
                   onChange={(e) => setPin(e.target.value)}
                   maxLength={4}
                   placeholder="••••"
-                  className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-900 border border-slate-700/80 text-sm text-white tracking-widest focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-600"
+                  className="w-full pl-11 pr-4 py-3 rounded-xl bg-navy-950 border border-navy-700 text-sm text-white tracking-widest focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-600 font-mono"
                   required
                 />
               </div>
@@ -119,20 +140,19 @@ export const Login = () => {
             <Button
               type="submit"
               isLoading={loading}
-              className="w-full py-3.5 mt-4 text-sm font-bold shadow-lg shadow-brand-500/10 cursor-pointer"
+              className="w-full py-3.5 mt-2 text-xs font-black uppercase tracking-wider shadow-lg shadow-brand-600/20 cursor-pointer"
             >
-              Sign In to Dashboard
+              Access Business CRM
             </Button>
           </form>
-        </div>
 
-        {/* Public portal redirection link */}
-        <button
-          onClick={() => navigate('/')}
-          className="mt-6 text-xs font-semibold text-slate-500 hover:text-slate-400 transition-colors cursor-pointer"
-        >
-          ← Go to Public Website
-        </button>
+          {/* Quick login hint */}
+          <div className="mt-6 pt-5 border-t border-navy-800 text-center">
+            <p className="text-[11px] text-slate-400">
+              Default Owner Account: <strong className="text-white font-mono">9539691738</strong> • PIN: <strong className="text-white font-mono">0000</strong>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

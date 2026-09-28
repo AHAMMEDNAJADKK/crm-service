@@ -193,7 +193,7 @@ export const Customers = () => {
           <div className="flex items-center justify-between">
             <button
               onClick={() => setProfileId(null)}
-              className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white px-3 py-2 rounded-xl border border-slate-200 cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-navy-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-navy-700 cursor-pointer shadow-2xs"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back to Customers Directory</span>
@@ -214,26 +214,26 @@ export const Customers = () => {
           ) : profileData?.customer ? (
             <div className="space-y-6">
               {/* Profile Card Header */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-700/60 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-black text-slate-900">{profileData.customer.name}</h2>
+                    <h2 className="text-xl font-black text-slate-900 dark:text-white">{profileData.customer.name}</h2>
                     {profileData.customer.nameMalayalam && (
-                      <span className="text-sm text-brand-600 font-bold bg-brand-50 px-2.5 py-0.5 rounded-md">
+                      <span className="text-sm text-brand-600 dark:text-brand-400 font-bold bg-brand-50 dark:bg-brand-950/50 px-2.5 py-0.5 rounded-md">
                         {profileData.customer.nameMalayalam}
                       </span>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-1">
-                    <span className="flex items-center gap-1 font-semibold text-slate-700">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400 pt-1">
+                    <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
                       <Phone className="w-3.5 h-3.5 text-slate-400" />
                       {profileData.customer.mobile}
                     </span>
                     {profileData.customer.alternateMobile && (
-                      <span className="text-slate-400">Alt: {profileData.customer.alternateMobile}</span>
+                      <span className="text-slate-400 dark:text-slate-500">Alt: {profileData.customer.alternateMobile}</span>
                     )}
                     {profileData.customer.place && (
-                      <span className="flex items-center gap-1 text-slate-500">
+                      <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
                         <MapPin className="w-3.5 h-3.5 text-slate-400" />
                         {profileData.customer.place}
                       </span>
@@ -243,19 +243,19 @@ export const Customers = () => {
 
                 {/* Profile Financial Summary */}
                 <div className="flex items-center gap-3">
-                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-center min-w-[90px]">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Total Visits</span>
-                    <span className="text-lg font-black font-mono text-slate-800">{profileData.stats?.totalVisits || 0}</span>
+                  <div className="p-3 bg-slate-50 dark:bg-navy-950 border border-slate-100 dark:border-navy-800 rounded-xl text-center min-w-[90px]">
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block">Total Visits</span>
+                    <span className="text-lg font-black font-mono text-slate-800 dark:text-slate-200">{profileData.stats?.totalVisits || 0}</span>
                   </div>
-                  <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-center min-w-[110px]">
-                    <span className="text-[10px] text-emerald-600 font-bold uppercase block">Total Paid</span>
-                    <span className="text-lg font-black font-mono text-emerald-700">
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/50 rounded-xl text-center min-w-[110px]">
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase block">Total Paid</span>
+                    <span className="text-lg font-black font-mono text-emerald-700 dark:text-emerald-400">
                       {formatCurrency(profileData.stats?.totalPaid || 0)}
                     </span>
                   </div>
-                  <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-center min-w-[110px]">
-                    <span className="text-[10px] text-red-500 font-bold uppercase block">Outstanding</span>
-                    <span className="text-lg font-black font-mono text-red-700">
+                  <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/50 rounded-xl text-center min-w-[110px]">
+                    <span className="text-[10px] text-red-500 dark:text-red-400 font-bold uppercase block">Outstanding</span>
+                    <span className="text-lg font-black font-mono text-red-700 dark:text-red-400">
                       {formatCurrency(profileData.stats?.outstandingBalance || 0)}
                     </span>
                   </div>
@@ -263,10 +263,10 @@ export const Customers = () => {
               </div>
 
               {/* Customer's Vehicles */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">
+              <div className="bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-700/60 rounded-2xl p-6 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                    <Car className="w-4 h-4 text-brand-600" />
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
+                    <Car className="w-4 h-4 text-brand-600 dark:text-brand-400" />
                     Customer's Vehicles ({(profileData.vehicles || []).length})
                   </h3>
                   <Button
@@ -280,20 +280,20 @@ export const Customers = () => {
                 </div>
 
                 {(profileData.vehicles || []).length === 0 ? (
-                  <p className="text-xs text-slate-400 py-4 text-center">No vehicles linked to this customer yet.</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 py-4 text-center">No vehicles linked to this customer yet.</p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {profileData.vehicles.map(v => (
-                      <div key={v._id} className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                      <div key={v._id} className="p-3.5 bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 rounded-xl flex items-center justify-between">
                         <div>
-                          <span className="font-mono font-extrabold text-slate-900 text-sm uppercase block">
+                          <span className="font-mono font-extrabold text-slate-900 dark:text-white text-sm uppercase block">
                             {v.regNumber}
                           </span>
-                          <span className="text-[11px] text-slate-500 font-semibold uppercase">
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold uppercase">
                             {v.vehicleType} {v.brand ? `• ${v.brand}` : ''} {v.model ? v.model : ''}
                           </span>
                         </div>
-                        <span className="text-[10px] bg-white border border-slate-200 text-slate-600 font-bold px-2 py-1 rounded">
+                        <span className="text-[10px] bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-300 font-bold px-2 py-1 rounded">
                           {v.colour || 'Vehicle'}
                         </span>
                       </div>
@@ -303,38 +303,38 @@ export const Customers = () => {
               </div>
 
               {/* Service History Timeline */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">
-                <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-brand-600" />
+              <div className="bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-700/60 rounded-2xl p-6 shadow-xs space-y-4">
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-brand-600 dark:text-brand-400" />
                   Service History
                 </h3>
 
                 {(profileData.jobCards || []).length === 0 ? (
-                  <p className="text-xs text-slate-400 py-4 text-center">No service records found for this customer.</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 py-4 text-center">No service records found for this customer.</p>
                 ) : (
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-slate-100 dark:divide-navy-800">
                     {profileData.jobCards.map(j => (
                       <div key={j._id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-800 capitalize">{j.serviceName || j.washPackage}</span>
-                            <span className="font-mono font-bold text-slate-600 uppercase bg-slate-100 px-1.5 py-0.5 rounded">
+                            <span className="font-bold text-slate-800 dark:text-slate-200 capitalize">{j.serviceName || j.washPackage}</span>
+                            <span className="font-mono font-bold text-slate-600 dark:text-slate-300 uppercase bg-slate-100 dark:bg-navy-950 px-1.5 py-0.5 rounded">
                               {j.vehicleReg}
                             </span>
                             <Badge variant={j.status}>{j.serviceStatus || j.status}</Badge>
                           </div>
-                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500 block mt-0.5">
                             {formatDate(j.createdAt, true)} • Token: {j.tokenNumber}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-4 text-right">
                           <div>
-                            <span className="font-mono font-bold text-slate-900 block text-sm">
+                            <span className="font-mono font-bold text-slate-900 dark:text-white block text-sm">
                               {formatCurrency(j.finalAmount !== undefined ? j.finalAmount : (j.price || 0))}
                             </span>
                             <span className={`text-[10px] font-bold uppercase ${
-                              j.paymentStatus === 'paid' ? 'text-emerald-600' : 'text-amber-600'
+                              j.paymentStatus === 'paid' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
                             }`}>
                               {j.paymentStatus}
                             </span>
@@ -351,12 +351,12 @@ export const Customers = () => {
       ) : (
         /* Customers Directory View */
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-navy-900 p-6 rounded-2xl border border-slate-200/80 dark:border-navy-700/60 shadow-xs">
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                 Customer Management
               </h1>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 Directory of registered clients with Malayalam search support and service tracking.
               </p>
             </div>
@@ -367,7 +367,7 @@ export const Customers = () => {
           </div>
 
           {/* Search Box */}
-          <div className="bg-white p-4 border border-slate-200/60 rounded-xl shadow-xs">
+          <div className="bg-white dark:bg-navy-900 p-4 border border-slate-200/60 dark:border-navy-700/60 rounded-xl shadow-xs">
             <div className="relative max-w-md w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input
@@ -378,22 +378,22 @@ export const Customers = () => {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition-all"
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-700 text-slate-900 dark:text-slate-100 rounded-lg text-xs focus:outline-none focus:border-brand-500 focus:bg-white dark:focus:bg-navy-900 transition-all placeholder-slate-400 dark:placeholder-slate-500"
               />
             </div>
           </div>
 
           {/* Table Container */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+          <div className="bg-white dark:bg-navy-900 border border-slate-200/80 dark:border-navy-700/60 rounded-2xl shadow-xs overflow-hidden">
             {isListLoading ? (
               <div className="py-20 text-center"><Spinner size="lg" /></div>
             ) : customersList.length === 0 ? (
-              <div className="py-16 text-center text-slate-400 text-xs">No customer records found.</div>
+              <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-xs">No customer records found.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                    <tr className="bg-slate-50/80 dark:bg-navy-950/80 border-b border-slate-200 dark:border-navy-700 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
                       <th className="py-3 px-4">Customer Name</th>
                       <th className="py-3 px-4">മലയാളം പേര്</th>
                       <th className="py-3 px-4">Mobile</th>
@@ -402,33 +402,33 @@ export const Customers = () => {
                       <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
                     {customersList.map(cust => (
-                      <tr key={cust._id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-3 px-4 font-bold text-slate-800">
+                      <tr key={cust._id} className="hover:bg-slate-50/60 dark:hover:bg-navy-800/40 transition-colors">
+                        <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200">
                           <button
                             type="button"
                             onClick={() => setProfileId(cust._id)}
-                            className="hover:text-brand-600 text-left cursor-pointer"
+                            className="hover:text-brand-500 text-left cursor-pointer"
                           >
                             {cust.name}
                           </button>
                         </td>
 
-                        <td className="py-3 px-4 font-semibold text-slate-700">
+                        <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
                           {cust.nameMalayalam || '-'}
                         </td>
 
-                        <td className="py-3 px-4 font-mono font-semibold text-slate-700">
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-700 dark:text-slate-300">
                           {cust.mobile}
-                          {cust.alternateMobile && <span className="block text-[10px] text-slate-400">{cust.alternateMobile}</span>}
+                          {cust.alternateMobile && <span className="block text-[10px] text-slate-400 dark:text-slate-500">{cust.alternateMobile}</span>}
                         </td>
 
-                        <td className="py-3 px-4 text-slate-600">
+                        <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
                           {cust.place || cust.address || '-'}
                         </td>
 
-                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-800">
+                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
                           {cust.totalWashes || 0}
                         </td>
 
@@ -443,7 +443,7 @@ export const Customers = () => {
                           <button
                             type="button"
                             onClick={() => openEditModal(cust)}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-navy-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors cursor-pointer"
                             title="Edit"
                           >
                             <Edit2 className="w-3.5 h-3.5 inline" />
@@ -455,7 +455,7 @@ export const Customers = () => {
                                 deleteCustomerMutation.mutate(cust._id);
                               }
                             }}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-navy-700 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
                             title="Delete"
                           >
                             <Trash2 className="w-3.5 h-3.5 inline" />

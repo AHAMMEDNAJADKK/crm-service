@@ -223,8 +223,8 @@ export const Settings = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">System Settings</h1>
-          <p className="text-xs text-slate-400 mt-1">Configure business water rates, cleaning decks, brand logos, and PIN access controls.</p>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">System Settings</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Configure business water rates, cleaning decks, brand logos, and PIN access controls.</p>
         </div>
       </div>
 
@@ -233,13 +233,13 @@ export const Settings = () => {
         
         {/* Navigation Sidebar */}
         <div className="lg:col-span-1">
-          <div className="bg-white border border-slate-200/60 p-2.5 rounded-2xl flex flex-col gap-1.5 shadow-xs">
+          <div className="bg-white dark:bg-navy-900 border border-slate-200/60 dark:border-navy-700/60 p-2.5 rounded-2xl flex flex-col gap-1.5 shadow-xs">
             <button
               onClick={() => setTab('profile')}
               className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                 tab === 'profile'
-                  ? 'bg-brand-50 text-brand-600 border border-brand-100/50'
-                  : 'text-slate-500 hover:bg-slate-50'
+                  ? 'bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 border border-brand-100/50 dark:border-brand-800/40'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-navy-800'
               }`}
             >
               <Sliders className="w-4 h-4" />
@@ -249,8 +249,8 @@ export const Settings = () => {
               onClick={() => setTab('sms')}
               className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                 tab === 'sms'
-                  ? 'bg-brand-50 text-brand-600 border border-brand-100/50'
-                  : 'text-slate-500 hover:bg-slate-50'
+                  ? 'bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 border border-brand-100/50 dark:border-brand-800/40'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-navy-800'
               }`}
             >
               <BellRing className="w-4 h-4" />
@@ -260,8 +260,8 @@ export const Settings = () => {
               onClick={() => setTab('security')}
               className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                 tab === 'security'
-                  ? 'bg-brand-50 text-brand-600 border border-brand-100/50'
-                  : 'text-slate-500 hover:bg-slate-50'
+                  ? 'bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 border border-brand-100/50 dark:border-brand-800/40'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-navy-800'
               }`}
             >
               <Lock className="w-4 h-4" />

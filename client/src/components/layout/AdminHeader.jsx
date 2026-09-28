@@ -1,16 +1,46 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Menu, Search, LogOut, Plus, Bell } from 'lucide-react';
+import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  Menu,
+  Search,
+  Plus,
+  Bell,
+  LogOut,
+  Sparkles,
+  Command
+} from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useUiStore from '../../store/uiStore';
-import api from '../../services/api';
+import ThemeSwitcher from '../common/ThemeSwitcher';
+
+const ROUTE_TITLES = {
+  '/admin/dashboard': 'Command Dashboard',
+  '/admin/jobs': "Today's Active Services",
+  '/admin/history': 'Service History & Logs',
+  '/admin/customers': 'Customer Directory',
+  '/admin/vehicles': 'Vehicle Registry',
+  '/admin/settings/pricing': 'Service Types & Pricing Matrix',
+  '/admin/billing': 'Payments & Income Ledger',
+  '/admin/expenses': 'Expense Management',
+  '/admin/outstanding': 'Outstanding Receivables',
+  '/admin/reports': 'Business Analytics & Reports',
+  '/admin/settings': 'Station Configuration',
+  '/admin/staff': 'Staff Management'
+};
 
 export const AdminHeader = ({ onOpenNewService }) => {
   const { user, logout } = useAuthStore();
-  const { toggleSidebar, addToast, stationSettings } = useUiStore();
+  const {
+    toggleSidebar,
+    toggleMobileNav,
+    openGlobalSearch,
+    unseenNotifications,
+    addToast
+  } = useUiStore();
+  const location = useLocation();
   const navigate = useNavigate();
 
-  const [globalSearchInput, setGlobalSearchInput] = useState('');
+  const currentTitle = ROUTE_TITLES[location.pathname] || 'AHAMMED SONS CRM';
 
   const handleLogout = async () => {
     await logout();
@@ -18,92 +48,101 @@ export const AdminHeader = ({ onOpenNewService }) => {
     navigate('/admin/login');
   };
 
-  const handleGlobalSearch = (e) => {
-    e.preventDefault();
-    if (globalSearchInput.trim()) {
-      navigate(`/admin/reports?search=${encodeURIComponent(globalSearchInput.trim())}`);
-    }
-  };
-
-  const logoUrl = stationSettings?.logoUrl || '/uploads/logo/station-logo.jpg';
-
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 shrink-0 z-30 select-none">
-      {/* Left: Sidebar Toggle & Branding */}
-      <div className="flex items-center gap-3">
+    <header className="h-16 bg-white dark:bg-navy-850 border-b border-slate-200 dark:border-navy-700 flex items-center justify-between px-3 sm:px-6 shrink-0 z-20 select-none transition-colors">
+      {/* Left: Mobile Drawer Trigger / Desktop Sidebar Collapse & Page Title */}
+      <div className="flex items-center gap-2 sm:gap-4 overflow-hidden">
+        {/* Mobile menu button */}
         <button
-          onClick={toggleSidebar}
-          className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
-          style={{ minWidth: '40px', minHeight: '40px' }}
-          aria-label="Toggle navigation drawer"
+          onClick={toggleMobileNav}
+          className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-750 lg:hidden cursor-pointer"
+          aria-label="Open mobile navigation drawer"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2">
-          <img
-            src={`${api.defaults.baseURL || ''}${logoUrl}`}
-            alt="Logo"
-            className="h-8 w-8 object-contain rounded"
-            onError={(e) => { e.target.style.display = 'none'; }}
-          />
-          <div className="hidden sm:flex flex-col">
-            <span className="font-black text-xs text-slate-800 tracking-wider uppercase leading-none">
-              {stationSettings?.stationName || 'AHAMMED SONS WATER SERVICE'}
-            </span>
-            <span className="text-[10px] text-brand-600 font-bold uppercase tracking-widest mt-0.5">
-              Service Management
-            </span>
-          </div>
+        {/* Desktop collapse button */}
+        <button
+          onClick={toggleSidebar}
+          className="hidden lg:flex p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-750 cursor-pointer"
+          aria-label="Toggle sidebar collapse"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <div className="flex flex-col overflow-hidden">
+          <h1 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide truncate">
+            {currentTitle}
+          </h1>
+          <span className="hidden sm:inline text-[10px] text-brand-600 dark:text-brand-400 font-bold uppercase tracking-wider">
+            AHAMMED SONS WATER SERVICE
+          </span>
         </div>
       </div>
 
-      {/* Center: Quick Search (on md+ screens) */}
-      <form onSubmit={handleGlobalSearch} className="hidden md:flex items-center flex-1 max-w-sm mx-6">
-        <div className="relative w-full">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-          <input
-            type="text"
-            value={globalSearchInput}
-            onChange={(e) => setGlobalSearchInput(e.target.value)}
-            placeholder="Search vehicle number, customer, mobile..."
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-brand-500 focus:bg-white"
-          />
-        </div>
-      </form>
+      {/* Center: Global Search trigger button */}
+      <div className="flex-1 max-w-xs md:max-w-md mx-2 sm:mx-6">
+        <button
+          type="button"
+          onClick={openGlobalSearch}
+          className="w-full flex items-center justify-between px-3 py-1.5 bg-slate-50 dark:bg-navy-900 hover:bg-slate-100 dark:hover:bg-navy-750 border border-slate-200 dark:border-navy-750 rounded-xl text-xs text-slate-400 dark:text-slate-500 transition-colors shadow-2xs cursor-pointer"
+        >
+          <div className="flex items-center gap-2 truncate">
+            <Search className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+            <span className="truncate">Search plate, customer, Malayalam...</span>
+          </div>
+          <span className="hidden md:flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 bg-slate-200 dark:bg-navy-750 text-slate-500 dark:text-slate-400 rounded">
+            Ctrl+K
+          </span>
+        </button>
+      </div>
 
-      {/* Right: Quick Action & User Session */}
-      <div className="flex items-center gap-2 sm:gap-4">
+      {/* Right: Quick Action, Notifications, Theme, Profile */}
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* + New Service Quick Action Button */}
         {onOpenNewService && (
           <button
             type="button"
             onClick={onOpenNewService}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-black shadow-xs shadow-brand-600/30 transition-all active:scale-95 cursor-pointer shrink-0"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5 font-bold" />
             <span className="hidden sm:inline">New Service</span>
           </button>
         )}
 
-        {/* User Info */}
-        <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-slate-200">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-bold text-slate-800 leading-none">{user?.name || 'Owner'}</p>
-            <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">{user?.role || 'Admin'}</p>
-          </div>
-          <div className="h-8 w-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-extrabold shadow-xs">
-            {user?.name ? user.name.substring(0, 2).toUpperCase() : 'AS'}
-          </div>
+        {/* Theme Switcher (Compact icon in header) */}
+        <div className="hidden sm:block">
+          <ThemeSwitcher compact />
         </div>
 
-        {/* Logout */}
+        {/* Notifications */}
         <button
-          onClick={handleLogout}
-          className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-          title="Log out"
+          type="button"
+          onClick={() => addToast('No unread notifications at this time', 'info')}
+          className="relative p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-navy-750 transition-colors cursor-pointer"
+          title="Notifications"
         >
-          <LogOut className="w-4 h-4" />
+          <Bell className="w-4 h-4" />
+          {unseenNotifications > 0 && (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          )}
         </button>
+
+        {/* User Profile */}
+        <div className="flex items-center gap-2 pl-1 sm:pl-2 border-l border-slate-200 dark:border-navy-700">
+          <div className="w-8 h-8 rounded-xl bg-navy-950 dark:bg-navy-800 text-brand-400 border border-navy-800 dark:border-navy-700 flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
+            {user?.name ? user.name.substring(0, 1).toUpperCase() : 'A'}
+          </div>
+          <div className="hidden md:flex flex-col">
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">
+              {user?.name || 'Owner'}
+            </span>
+            <span className="text-[9px] uppercase font-semibold text-brand-600 dark:text-brand-400 tracking-wider mt-0.5">
+              {user?.role || 'Admin'}
+            </span>
+          </div>
+        </div>
       </div>
     </header>
   );

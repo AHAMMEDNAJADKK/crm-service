@@ -2,13 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --crm-bg: #f8fafc;
+  --crm-surface: #ffffff;
+  --crm-surface-elevated: #ffffff;
+  --crm-border: #e2e8f0;
+  --crm-border-subtle: #f1f5f9;
+  --crm-text-primary: #0f172a;
+  --crm-text-secondary: #475569;
+  --crm-text-muted: #94a3b8;
+  --crm-primary: #0284c7;
+  --crm-primary-hover: #0369a1;
+  --crm-primary-soft: #e0f2fe;
+  --crm-accent: #06b6d4;
+  --crm-accent-soft: #cffafe;
+  --crm-success: #10b981;
+  --crm-success-soft: #d1fae5;
+  --crm-warning: #f59e0b;
+  --crm-warning-soft: #fef3c7;
+  --crm-danger: #ef4444;
+  --crm-danger-soft: #fee2e2;
+}
+
+.dark {
+  --crm-bg: #0a0f1d;
+  --crm-surface: #131e35;
+  --crm-surface-elevated: #17243e;
+  --crm-border: #1e2f50;
+  --crm-border-subtle: #17243e;
+  --crm-text-primary: #f8fafc;
+  --crm-text-secondary: #cbd5e1;
+  --crm-text-muted: #64748b;
+  --crm-primary: #0284c7;
+  --crm-primary-hover: #38bdf8;
+  --crm-primary-soft: rgba(2, 132, 199, 0.18);
+  --crm-accent: #38bdf8;
+  --crm-accent-soft: rgba(56, 189, 248, 0.18);
+  --crm-success: #10b981;
+  --crm-success-soft: rgba(16, 185, 129, 0.18);
+  --crm-warning: #f59e0b;
+  --crm-warning-soft: rgba(245, 158, 11, 0.18);
+  --crm-danger: #ef4444;
+  --crm-danger-soft: rgba(239, 68, 68, 0.18);
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
   }
   
   body {
-    @apply bg-slate-50 text-slate-800 font-sans antialiased;
+    background-color: var(--crm-bg);
+    color: var(--crm-text-primary);
+    font-family: 'Outfit', 'Inter', 'Noto Sans Malayalam', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
@@ -21,50 +69,37 @@
 }
 
 .dark .glass {
-  background: rgba(30, 41, 59, 0.7);
+  background: rgba(19, 30, 53, 0.7);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(30, 47, 80, 0.5);
 }
 
-/* Scrollbar tweaks */
+/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  @apply bg-slate-100;
+  background-color: var(--crm-bg);
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
+  background-color: var(--crm-border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--crm-text-muted);
 }
 
-/* Calendar styling updates */
-.rbc-calendar {
-  @apply border border-slate-200 rounded-lg overflow-hidden bg-white text-sm shadow-sm;
-}
-.rbc-header {
-  @apply bg-slate-50 border-b border-slate-200 py-3 text-slate-600 font-medium !important;
-}
-.rbc-day-bg {
-  @apply border-r border-b border-slate-100;
-}
-.rbc-event {
-  @apply bg-brand-600 hover:bg-brand-700 text-white rounded px-2 py-1 text-xs border-0 font-medium transition-all shadow-sm !important;
-}
-.rbc-today {
-  @apply bg-brand-50/40 !important;
+/* Utility classes for fast theme consistency */
+.crm-card {
+  background-color: var(--crm-surface);
+  border: 1px solid var(--crm-border);
+  border-radius: 1rem;
 }
 
-/* Custom GSAP horizontal scroll pins support */
-.horizontal-scroll-container {
-  display: flex;
-  flex-wrap: nowrap;
-  will-change: transform;
-}
-
-.horizontal-scroll-panel {
-  flex-shrink: 0;
-  width: 100vw;
-  height: 100vh;
+.crm-card-elevated {
+  background-color: var(--crm-surface-elevated);
+  border: 1px solid var(--crm-border);
+  border-radius: 1rem;
 }

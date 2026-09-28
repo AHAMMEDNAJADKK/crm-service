@@ -5,10 +5,10 @@ const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Rate limiter for login: 5 requests per 15 minutes
+// Rate limiter for login
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
   message: {
     success: false,
     error: 'Too many login attempts from this IP, please try again after 15 minutes',

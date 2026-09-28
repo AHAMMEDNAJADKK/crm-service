@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Save,
@@ -19,7 +20,6 @@ import {
 import api from '../../services/api';
 import useUiStore from '../../store/uiStore';
 import Button from '../../components/ui/Button';
-import Card from '../../components/ui/Card';
 import Spinner from '../../components/ui/Spinner';
 import Modal from '../../components/ui/Modal';
 import formatCurrency from '../../utils/formatCurrency';
@@ -27,8 +27,21 @@ import formatCurrency from '../../utils/formatCurrency';
 export const PricingEditor = () => {
   const queryClient = useQueryClient();
   const { addToast } = useUiStore();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState('matrix'); // 'matrix', 'services', 'vehicleTypes'
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabParam || 'matrix'); // 'matrix', 'services', 'vehicleTypes'
+
+  useEffect(() => {
+    if (tabParam && ['matrix', 'services', 'vehicleTypes'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId });
+  };
 
   // Pricing matrix state: { "vehicleType_washPackage": { price, isNA } }
   const [prices, setPrices] = useState({});
@@ -87,35 +100,80 @@ export const PricingEditor = () => {
     }
   });
 
-  // Sync DB pricing data to local state
+  // Populate local price state when data arrives
   useEffect(() => {
     if (pricingData?.data) {
-      const initialPrices = {};
-      pricingData.data.forEach(p => {
-        initialPrices[`${p.vehicleType}_${p.washPackage}`] = {
-          price: p.price === null || p.price === undefined ? '' : p.price,
-          isNA: !!p.isNA
+      const map = {};
+      pricingData.data.forEach((p) => {
+        map[`${p.vehicleType}_${p.washPackage}`] = {
+          price: p.price ?? '',
+          isNA: Boolean(p.isNA)
         };
       });
-      setPrices(initialPrices);
+      setPrices(map);
       setDirty({});
     }
   }, [pricingData]);
 
-  // Bulk save pricing mutation
+  // Handle in-place price edits
+  const handleCellChange = (vehicleType, washPackage, value) => {
+    const key = `${vehicleType}_${washPackage}`;
+    setPrices((prev) => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] || {}),
+        price: value,
+        isNA: false
+      }
+    }));
+    setDirty((prev) => ({ ...prev, [key]: true }));
+  };
+
+  // Toggle Not-Applicable (N/A)
+  const handleNAToggle = (vehicleType, washPackage) => {
+    const key = `${vehicleType}_${washPackage}`;
+    const current = prices[key] || { price: '', isNA: false };
+    const nextIsNA = !current.isNA;
+
+    setPrices((prev) => ({
+      ...prev,
+      [key]: {
+        price: nextIsNA ? '' : (current.price || 0),
+        isNA: nextIsNA
+      }
+    }));
+    setDirty((prev) => ({ ...prev, [key]: true }));
+  };
+
+  // Save Pricing Matrix
   const saveMatrixMutation = useMutation({
     mutationFn: async (payload) => {
       return await api.put('/api/v1/admin/settings/pricing', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminSettingsPricing'] });
-      addToast('Pricing matrix saved successfully!', 'success');
+      queryClient.invalidateQueries({ queryKey: ['pricingMatrix'] });
       setDirty({});
+      addToast('Pricing matrix updated successfully!', 'success');
     },
     onError: (err) => {
-      addToast(err.response?.data?.error || 'Failed to save prices', 'error');
+      addToast(err.response?.data?.error || 'Failed to update pricing matrix', 'error');
     }
   });
+
+  const handleSaveMatrix = () => {
+    const payload = Object.entries(prices).map(([key, val]) => {
+      const [vehicleType, washPackage] = key.split('_');
+      return {
+        vehicleType,
+        washPackage,
+        price: val.price === '' ? null : parseFloat(val.price),
+        isNA: Boolean(val.isNA)
+      };
+    });
+
+    saveMatrixMutation.mutate({ prices: payload });
+  };
 
   // Reset prices mutation
   const resetMatrixMutation = useMutation({
@@ -198,69 +256,20 @@ export const PricingEditor = () => {
     }
   });
 
-  // Handle cell price change
-  const handleCellChange = (vehicleTypeCode, serviceCode, value) => {
-    const key = `${vehicleTypeCode}_${serviceCode}`;
-    const cleanVal = value === '' ? '' : Math.max(0, parseFloat(value));
-
-    setPrices(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        price: isNaN(cleanVal) ? '' : cleanVal
-      }
-    }));
-
-    setDirty(prev => ({ ...prev, [key]: true }));
-  };
-
-  // Handle NA Toggle
-  const handleNAToggle = (vehicleTypeCode, serviceCode) => {
-    const key = `${vehicleTypeCode}_${serviceCode}`;
-    const currentNA = prices[key]?.isNA || false;
-
-    setPrices(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        isNA: !currentNA
-      }
-    }));
-
-    setDirty(prev => ({ ...prev, [key]: true }));
-  };
-
-  // Submit bulk matrix changes
-  const handleSaveMatrix = () => {
-    const payload = Object.entries(prices).map(([key, val]) => {
-      const [vehicleType, ...rest] = key.split('_');
-      const washPackage = rest.join('_');
-      return {
-        vehicleType,
-        washPackage,
-        price: val.price === '' ? null : parseFloat(val.price),
-        isNA: Boolean(val.isNA)
-      };
-    });
-
-    saveMatrixMutation.mutate({ prices: payload });
-  };
-
   const vehicleTypes = pricingData?.vehicleTypes || vehicleTypesList.filter(v => v.isActive);
   const servicePackages = pricingData?.servicePackages || servicesList.filter(s => s.isActive);
   const dirtyCount = Object.values(dirty).filter(Boolean).length;
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto select-none">
-      
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto select-none pb-12">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-navy-800 p-6 rounded-2xl border border-slate-200/80 dark:border-navy-700 shadow-xs transition-colors">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
             Services & Pricing Architecture
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Configure vehicle categories, service packages, and vehicle-specific service rates.
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Configure vehicle categories, service packages, and 2D vehicle-specific rates for AHAMMED SONS
           </p>
         </div>
 
@@ -326,7 +335,7 @@ export const PricingEditor = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto no-scrollbar">
+      <div className="flex border-b border-slate-200 dark:border-navy-700 gap-2 overflow-x-auto no-scrollbar">
         {[
           { id: 'matrix', label: 'Vehicle Pricing Matrix' },
           { id: 'services', label: `Service Packages (${servicesList.length})` },
@@ -335,11 +344,11 @@ export const PricingEditor = () => {
           <button
             key={t.id}
             type="button"
-            onClick={() => setActiveTab(t.id)}
+            onClick={() => handleTabChange(t.id)}
             className={`pb-3 px-3 text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === t.id
-                ? 'border-b-2 border-brand-600 text-brand-600'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'border-b-2 border-brand-600 text-brand-600 dark:text-brand-400 dark:border-brand-400'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             {t.label}
@@ -353,27 +362,27 @@ export const PricingEditor = () => {
           {isMatrixLoading ? (
             <div className="py-20 text-center"><Spinner size="lg" /></div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl shadow-xs overflow-hidden transition-colors">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="bg-slate-900 text-white">
-                      <th className="py-3.5 px-4 sticky left-0 z-20 bg-slate-900 min-w-[150px] font-bold uppercase text-[11px] tracking-wider">
+                    <tr className="bg-navy-950 text-white border-b border-navy-800">
+                      <th className="py-3.5 px-4 sticky left-0 z-20 bg-navy-950 min-w-[150px] font-extrabold uppercase text-[10px] tracking-wider">
                         Vehicle Type
                       </th>
                       {servicePackages.map(sp => (
-                        <th key={sp.code} className="py-3.5 px-4 min-w-[160px] font-bold uppercase text-[11px] tracking-wider text-center">
+                        <th key={sp.code} className="py-3.5 px-4 min-w-[160px] font-extrabold uppercase text-[10px] tracking-wider text-center">
                           <div>{sp.name}</div>
-                          {sp.shortName && <div className="text-[10px] text-slate-400 font-normal mt-0.5">{sp.shortName}</div>}
+                          {sp.shortName && <div className="text-[10px] text-brand-400 font-normal mt-0.5">{sp.shortName}</div>}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-navy-750">
                     {vehicleTypes.map((vt) => (
-                      <tr key={vt.code} className="hover:bg-slate-50/70 transition-colors">
+                      <tr key={vt.code} className="hover:bg-slate-50/70 dark:hover:bg-navy-750/50 transition-colors">
                         {/* Vehicle Row Header */}
-                        <td className="py-3 px-4 font-bold text-slate-900 sticky left-0 bg-white z-10 border-r border-slate-100 shadow-2xs">
+                        <td className="py-3 px-4 font-bold text-slate-900 dark:text-white sticky left-0 bg-white dark:bg-navy-800 z-10 border-r border-slate-100 dark:border-navy-700 shadow-2xs">
                           <span className="uppercase tracking-wide">{vt.name}</span>
                           <span className="block text-[10px] text-slate-400 font-normal uppercase">
                             {vt.category || 'medium'}
@@ -392,7 +401,7 @@ export const PricingEditor = () => {
                                 <button
                                   type="button"
                                   onClick={() => handleNAToggle(vt.code, sp.code)}
-                                  className="w-full py-1.5 px-2 bg-slate-100 text-slate-400 font-semibold text-xs rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                                  className="w-full py-1.5 px-2 bg-slate-100 dark:bg-navy-750 text-slate-400 font-semibold text-xs rounded-lg hover:bg-slate-200 dark:hover:bg-navy-700 transition-colors cursor-pointer"
                                   title="Click to enable service for this vehicle type"
                                 >
                                   N/A (Disabled)
@@ -407,10 +416,10 @@ export const PricingEditor = () => {
                                       value={cell.price}
                                       onChange={(e) => handleCellChange(vt.code, sp.code, e.target.value)}
                                       placeholder="0"
-                                      className={`w-full pl-6 pr-2 py-1.5 border rounded-lg text-sm font-mono font-bold text-slate-800 text-right focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all ${
+                                      className={`w-full pl-6 pr-2 py-1.5 border rounded-lg text-sm font-mono font-bold text-slate-800 dark:text-slate-100 text-right focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all ${
                                         isDirty
-                                          ? 'border-brand-500 bg-brand-50/40 ring-1 ring-brand-400'
-                                          : 'border-slate-200 bg-slate-50 hover:bg-white'
+                                          ? 'border-brand-500 bg-brand-50/40 dark:bg-brand-950/40 ring-1 ring-brand-400'
+                                          : 'border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 hover:bg-white dark:hover:bg-navy-850'
                                       }`}
                                     />
                                   </div>
@@ -418,7 +427,7 @@ export const PricingEditor = () => {
                                   <button
                                     type="button"
                                     onClick={() => handleNAToggle(vt.code, sp.code)}
-                                    className="p-1 rounded text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                                    className="p-1 rounded text-slate-300 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-navy-750 transition-colors cursor-pointer"
                                     title="Mark Not Applicable"
                                   >
                                     <span className="text-[10px] font-bold">N/A</span>
@@ -435,10 +444,10 @@ export const PricingEditor = () => {
               </div>
 
               {/* Bottom Matrix Action Bar */}
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+              <div className="p-4 bg-slate-50 dark:bg-navy-850 border-t border-slate-100 dark:border-navy-700 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
                 <span className="flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 text-slate-400" />
-                  Type real prices for each vehicle type. Click "N/A" to disable a service for specific vehicles.
+                  Type prices for each vehicle type. Click "N/A" to disable a service for specific vehicles.
                 </span>
 
                 <div className="flex items-center gap-2">
@@ -457,7 +466,7 @@ export const PricingEditor = () => {
                     disabled={dirtyCount === 0}
                     onClick={handleSaveMatrix}
                   >
-                    Save All Rates
+                    {dirtyCount > 0 ? `Save Matrix (${dirtyCount})` : 'Save Matrix'}
                   </Button>
                 </div>
               </div>
@@ -466,31 +475,31 @@ export const PricingEditor = () => {
         </div>
       )}
 
-      {/* ===================== TAB 2: MANAGE SERVICES ===================== */}
+      {/* ===================== TAB 2: MANAGE SERVICE PACKAGES ===================== */}
       {activeTab === 'services' && (
         <div className="space-y-4">
           {isServicesLoading ? (
             <div className="py-20 text-center"><Spinner size="lg" /></div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-              <div className="divide-y divide-slate-100">
+            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl shadow-xs overflow-hidden transition-colors">
+              <div className="divide-y divide-slate-100 dark:divide-navy-750">
                 {servicesList.map((svc) => (
-                  <div key={svc._id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
+                  <div key={svc._id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-navy-750/50 transition-colors">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-slate-900 text-sm">{svc.name}</span>
+                        <span className="font-extrabold text-slate-900 dark:text-white text-sm">{svc.name}</span>
                         {svc.shortName && (
-                          <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-semibold">
+                          <span className="text-xs bg-slate-100 dark:bg-navy-750 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded font-semibold">
                             {svc.shortName}
                           </span>
                         )}
                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                          svc.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                          svc.isActive ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-navy-750 text-slate-400'
                         }`}>
                           {svc.isActive ? 'Active' : 'Disabled'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">{svc.description || 'No description provided.'}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{svc.description || 'No description provided.'}</p>
                       <span className="text-[11px] text-slate-400 block font-mono">
                         Code: {svc.code} • Duration: ~{svc.estimatedDuration} mins
                       </span>
@@ -500,7 +509,7 @@ export const PricingEditor = () => {
                       <button
                         type="button"
                         onClick={() => toggleServiceMutation.mutate(svc._id)}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-navy-700 hover:bg-slate-100 dark:hover:bg-navy-750 text-slate-700 dark:text-slate-300 cursor-pointer"
                       >
                         {svc.isActive ? 'Disable' : 'Enable'}
                       </button>
@@ -520,7 +529,7 @@ export const PricingEditor = () => {
                           });
                           setIsServiceModalOpen(true);
                         }}
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer"
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-750 cursor-pointer"
                         title="Edit Service"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -540,18 +549,18 @@ export const PricingEditor = () => {
           {isVTypesLoading ? (
             <div className="py-20 text-center"><Spinner size="lg" /></div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-              <div className="divide-y divide-slate-100">
+            <div className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl shadow-xs overflow-hidden transition-colors">
+              <div className="divide-y divide-slate-100 dark:divide-navy-750">
                 {vehicleTypesList.map((vt) => (
-                  <div key={vt._id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
+                  <div key={vt._id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-navy-750/50 transition-colors">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-slate-900 text-sm uppercase">{vt.name}</span>
-                        <span className="text-[10px] bg-brand-50 text-brand-700 px-2 py-0.5 rounded font-bold uppercase">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-sm uppercase">{vt.name}</span>
+                        <span className="text-[10px] bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded font-bold uppercase">
                           {vt.category || 'medium'}
                         </span>
                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                          vt.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                          vt.isActive ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-navy-750 text-slate-400'
                         }`}>
                           {vt.isActive ? 'Active' : 'Disabled'}
                         </span>
@@ -565,7 +574,7 @@ export const PricingEditor = () => {
                       <button
                         type="button"
                         onClick={() => toggleVTypeMutation.mutate(vt._id)}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-navy-700 hover:bg-slate-100 dark:hover:bg-navy-750 text-slate-700 dark:text-slate-300 cursor-pointer"
                       >
                         {vt.isActive ? 'Deactivate' : 'Activate'}
                       </button>
@@ -584,7 +593,7 @@ export const PricingEditor = () => {
                           });
                           setIsVTypeModalOpen(true);
                         }}
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer"
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-750 cursor-pointer"
                         title="Edit Category"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -610,50 +619,50 @@ export const PricingEditor = () => {
             e.preventDefault();
             saveServiceMutation.mutate(serviceFormData);
           }}
-          className="flex flex-col gap-4 text-slate-800 text-xs"
+          className="flex flex-col gap-4 text-slate-800 dark:text-slate-200 text-xs"
         >
           <div>
-            <label className="block font-bold uppercase text-slate-500 mb-1">Service Name</label>
+            <label className="block font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Service Name</label>
             <input
               type="text"
               value={serviceFormData.name}
               onChange={(e) => setServiceFormData(prev => ({ ...prev, name: e.target.value }))}
               placeholder="E.g. Full Underbody + Interior + Exterior"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 rounded-xl text-sm text-slate-800 dark:text-slate-100"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-bold uppercase text-slate-500 mb-1">Short Name</label>
+              <label className="block font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Short Name</label>
               <input
                 type="text"
                 value={serviceFormData.shortName}
                 onChange={(e) => setServiceFormData(prev => ({ ...prev, shortName: e.target.value }))}
                 placeholder="E.g. Underbody Wash"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 rounded-xl text-sm text-slate-800 dark:text-slate-100"
               />
             </div>
             <div>
-              <label className="block font-bold uppercase text-slate-500 mb-1">Duration (Mins)</label>
+              <label className="block font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Duration (Mins)</label>
               <input
                 type="number"
                 value={serviceFormData.estimatedDuration}
                 onChange={(e) => setServiceFormData(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 rounded-xl text-sm text-slate-800 dark:text-slate-100"
               />
             </div>
           </div>
 
           <div>
-            <label className="block font-bold uppercase text-slate-500 mb-1">Description</label>
+            <label className="block font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Description</label>
             <textarea
               rows={2}
               value={serviceFormData.description}
               onChange={(e) => setServiceFormData(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Service details and cleaning inclusions..."
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 rounded-xl text-sm resize-none text-slate-800 dark:text-slate-100"
             />
           </div>
 
@@ -678,27 +687,27 @@ export const PricingEditor = () => {
             e.preventDefault();
             saveVTypeMutation.mutate(vTypeFormData);
           }}
-          className="flex flex-col gap-4 text-slate-800 text-xs"
+          className="flex flex-col gap-4 text-slate-800 dark:text-slate-200 text-xs"
         >
           <div>
-            <label className="block font-bold uppercase text-slate-500 mb-1">Category Name</label>
+            <label className="block font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Category Name</label>
             <input
               type="text"
               value={vTypeFormData.name}
               onChange={(e) => setVTypeFormData(prev => ({ ...prev, name: e.target.value }))}
               placeholder="E.g. SUV, Hatchback, Auto, Bike"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 rounded-xl text-sm text-slate-800 dark:text-slate-100"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-bold uppercase text-slate-500 mb-1">Category Tier</label>
+              <label className="block font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Category Tier</label>
               <select
                 value={vTypeFormData.category}
                 onChange={(e) => setVTypeFormData(prev => ({ ...prev, category: e.target.value }))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 rounded-xl text-sm text-slate-800 dark:text-slate-100 cursor-pointer"
               >
                 <option value="light">Light (Bike/Auto)</option>
                 <option value="medium">Medium (Car/Sedan/SUV)</option>
@@ -709,12 +718,12 @@ export const PricingEditor = () => {
             </div>
 
             <div>
-              <label className="block font-bold uppercase text-slate-500 mb-1">Display Order</label>
+              <label className="block font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Display Order</label>
               <input
                 type="number"
                 value={vTypeFormData.displayOrder}
                 onChange={(e) => setVTypeFormData(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 rounded-xl text-sm text-slate-800 dark:text-slate-100"
               />
             </div>
           </div>
@@ -735,7 +744,7 @@ export const PricingEditor = () => {
         title="Reset Pricing Matrix"
         size="sm"
       >
-        <div className="space-y-4 text-xs text-slate-600">
+        <div className="space-y-4 text-xs text-slate-600 dark:text-slate-300">
           <p>Are you sure you want to reset all vehicle rates to system defaults? This will erase any customized price matrix values.</p>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setIsResetOpen(false)}>Cancel</Button>

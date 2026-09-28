@@ -1,7 +1,8 @@
 {
-  "name": "aquaclean-station",
+  "name": "ahammed-sons-water-service-crm",
   "private": true,
   "scripts": {
+    "server": "node server.js",
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",

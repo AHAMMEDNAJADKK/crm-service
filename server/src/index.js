@@ -55,10 +55,19 @@ app.use(express.urlencoded({ extended: true }));
 // Serve Uploaded Files statically (uploads folder)
 app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
-// Health check endpoint
-app.get('/api/v1/health', (req, res) => {
-  res.status(200).json({ status: 'ok', business: 'AHAMMED SONS WATER SERVICE', uptime: process.uptime() });
-});
+// Health check endpoints
+const healthHandler = (req, res) => {
+  res.status(200).json({
+    success: true,
+    status: 'ok',
+    message: 'AHAMMED SONS WATER SERVICE CRM API is running',
+    business: 'AHAMMED SONS WATER SERVICE',
+    timestamp: new Date().toISOString(),
+    uptime: Math.round(process.uptime())
+  });
+};
+app.get('/api/health', healthHandler);
+app.get('/api/v1/health', healthHandler);
 
 // Import Routes
 const authRoutes = require('./routes/authRoutes');
