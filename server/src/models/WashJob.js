@@ -40,8 +40,9 @@ const washJobSchema = new Schema({
   },
   washPackage: {
     type: String,
-    required: true,
-    trim: true
+    required: false,
+    trim: true,
+    default: 'general-wash'
   },
   serviceName: {
     type: String,
