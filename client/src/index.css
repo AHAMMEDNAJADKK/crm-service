@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-slate-50 text-slate-800 font-sans antialiased;
+  }
+}
+
+/* Glassmorphism utility classes */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Scrollbar tweaks */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-slate-100;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
+}
+
+/* Calendar styling updates */
+.rbc-calendar {
+  @apply border border-slate-200 rounded-lg overflow-hidden bg-white text-sm shadow-sm;
+}
+.rbc-header {
+  @apply bg-slate-50 border-b border-slate-200 py-3 text-slate-600 font-medium !important;
+}
+.rbc-day-bg {
+  @apply border-r border-b border-slate-100;
+}
+.rbc-event {
+  @apply bg-brand-600 hover:bg-brand-700 text-white rounded px-2 py-1 text-xs border-0 font-medium transition-all shadow-sm !important;
+}
+.rbc-today {
+  @apply bg-brand-50/40 !important;
+}
+
+/* Custom GSAP horizontal scroll pins support */
+.horizontal-scroll-container {
+  display: flex;
+  flex-wrap: nowrap;
+  will-change: transform;
+}
+
+.horizontal-scroll-panel {
+  flex-shrink: 0;
+  width: 100vw;
+  height: 100vh;
+}
