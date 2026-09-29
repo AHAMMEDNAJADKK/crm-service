@@ -11,10 +11,22 @@ const handleCSVDownload = (res, filename, headers, rows) => {
   res.status(200).send(csv);
 };
 
-// 1. Today's Dashboard Stats & Active Vehicles
+// 1. Today's Dashboard Stats & Active Vehicles (Supports custom date & period filter)
 const getTodayStats = async (req, res, next) => {
   try {
-    const data = await reportService.getTodayDashboard();
+    const { date, filter } = req.query;
+    const data = await reportService.getTodayDashboard(date || filter);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 1.1 Calendar Monthly Overview Stats
+const getCalendarMonthStats = async (req, res, next) => {
+  try {
+    const { year, month } = req.query;
+    const data = await reportService.getCalendarMonthData(year, month);
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -200,6 +212,7 @@ const getExpenseReport = async (req, res, next) => {
 
 module.exports = {
   getTodayStats,
+  getCalendarMonthStats,
   getWeeklyStats,
   getMonthlyStats,
   getDailyClosing,

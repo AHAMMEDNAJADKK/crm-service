@@ -65,7 +65,8 @@ export const AdminSidebar = ({ onOpenNewService }) => {
           }
         },
         { name: "Today's Services", path: '/admin/jobs', icon: Droplet },
-        { name: 'Service History', path: '/admin/history', icon: History }
+        { name: 'Service History', path: '/admin/history', icon: History },
+        { name: 'Calendar', path: '/admin/calendar', icon: Calendar }
       ]
     },
     {

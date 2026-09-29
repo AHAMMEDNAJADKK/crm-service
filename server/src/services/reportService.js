@@ -7,9 +7,18 @@ const Invoice = require('../models/Invoice');
 const ServicePackage = require('../models/ServicePackage');
 const VehicleType = require('../models/VehicleType');
 
-// Helper to get start and end of day in Date objects
+// Helper to get start and end of day in Date objects without timezone shifting
 const getDayBounds = (dateStr) => {
-  const d = dateStr ? new Date(dateStr) : new Date();
+  let d = new Date();
+  if (dateStr) {
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, day] = dateStr.split('-').map(Number);
+      d = new Date(y, m - 1, day, 12, 0, 0);
+    } else {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) d = parsed;
+    }
+  }
   const start = new Date(d);
   start.setHours(0, 0, 0, 0);
   const end = new Date(d);
@@ -17,13 +26,52 @@ const getDayBounds = (dateStr) => {
   return { start, end };
 };
 
-// 1. TODAY'S & OVERVIEW DASHBOARD METRICS
-const getTodayDashboard = async () => {
-  const { start, end } = getDayBounds();
+// 1. TODAY'S & OVERVIEW DASHBOARD METRICS (Supports specific date / period)
+const getTodayDashboard = async (targetDateOrFilter) => {
+  let start, end, label = 'Today';
+  const now = new Date();
 
-  // Wash jobs created today
+  if (targetDateOrFilter === 'yesterday') {
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    const bounds = getDayBounds(y);
+    start = bounds.start;
+    end = bounds.end;
+    label = 'Yesterday';
+  } else if (targetDateOrFilter === 'this-week') {
+    const s = new Date();
+    s.setDate(s.getDate() - 6);
+    s.setHours(0, 0, 0, 0);
+    start = s;
+    const e = new Date();
+    e.setHours(23, 59, 59, 999);
+    end = e;
+    label = 'This Week';
+  } else if (targetDateOrFilter === 'this-month') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    label = 'This Month';
+  } else if (targetDateOrFilter) {
+    const bounds = getDayBounds(targetDateOrFilter);
+    start = bounds.start;
+    end = bounds.end;
+    label = start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  } else {
+    const bounds = getDayBounds();
+    start = bounds.start;
+    end = bounds.end;
+  }
+
+  // Wash jobs matching the serviceDate business day
   const jobsAgg = await WashJob.aggregate([
-    { $match: { createdAt: { $gte: start, $lte: end } } },
+    {
+      $match: {
+        $or: [
+          { serviceDate: { $gte: start, $lte: end } },
+          { serviceDate: { $exists: false }, createdAt: { $gte: start, $lte: end } }
+        ]
+      }
+    },
     {
       $group: {
         _id: null,
@@ -99,7 +147,6 @@ const getTodayDashboard = async () => {
   const todayProfit = Math.round((amountCollected - totalExpenses) * 100) / 100;
 
   // --- THIS MONTH SUMMARY ---
-  const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
@@ -255,12 +302,22 @@ const getTodayDashboard = async () => {
     .limit(8)
     .select('tokenNumber vehicleReg vehicleType serviceName finalAmount amountPaid balance createdAt paymentStatus');
 
-  // Today's active service vehicles list
-  const todayVehicles = await WashJob.find({ createdAt: { $gte: start, $lte: end } })
+  // Selected date's active service vehicles list
+  const todayVehicles = await WashJob.find({
+    $or: [
+      { serviceDate: { $gte: start, $lte: end } },
+      { serviceDate: { $exists: false }, createdAt: { $gte: start, $lte: end } }
+    ]
+  })
     .populate('customerId', 'name nameMalayalam mobile place')
-    .sort({ createdAt: -1 });
+    .sort({ serviceDate: -1, createdAt: -1 });
 
   return {
+    selectedDate: {
+      start,
+      end,
+      label
+    },
     today: {
       totalServices: jobsData.totalServices,
       totalVehicles: jobsData.totalServices,
@@ -784,6 +841,158 @@ const globalSearch = async (searchTerm) => {
   return { customers, vehicles, jobs };
 };
 
+// 7. Calendar Month Overview Aggregation
+const getCalendarMonthData = async (yearInput, monthInput) => {
+  const now = new Date();
+  const year = parseInt(yearInput) || now.getFullYear();
+  const month = parseInt(monthInput) || (now.getMonth() + 1); // 1-12
+
+  const startOfMonth = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+
+  // Aggregate WashJobs for the month
+  const jobsAgg = await WashJob.aggregate([
+    {
+      $match: {
+        $or: [
+          { serviceDate: { $gte: startOfMonth, $lte: endOfMonth } },
+          { serviceDate: { $exists: false }, createdAt: { $gte: startOfMonth, $lte: endOfMonth } }
+        ]
+      }
+    },
+    {
+      $project: {
+        dateStr: {
+          $dateToString: {
+            format: '%Y-%m-%d',
+            date: { $ifNull: ['$serviceDate', '$createdAt'] }
+          }
+        },
+        status: 1,
+        finalAmount: { $ifNull: ['$finalAmount', '$price'] },
+        amountPaid: { $ifNull: ['$amountPaid', 0] }
+      }
+    },
+    {
+      $group: {
+        _id: '$dateStr',
+        totalVehicles: { $sum: 1 },
+        completedCount: { $sum: { $cond: [{ $in: ['$status', ['completed', 'delivered']] }, 1, 0] } },
+        serviceValue: {
+          $sum: { $cond: [{ $ne: ['$status', 'cancelled'] }, '$finalAmount', 0] }
+        },
+        jobPaid: {
+          $sum: { $cond: [{ $ne: ['$status', 'cancelled'] }, '$amountPaid', 0] }
+        }
+      }
+    }
+  ]);
+
+  // Aggregate Payments for the month
+  const paymentsAgg = await Payment.aggregate([
+    { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+        collection: { $sum: '$amount' }
+      }
+    }
+  ]);
+
+  // Aggregate Expenses for the month
+  const expensesAgg = await Expense.aggregate([
+    { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+        expenses: { $sum: '$amount' }
+      }
+    }
+  ]);
+
+  const daysMap = {};
+  jobsAgg.forEach(j => {
+    daysMap[j._id] = {
+      date: j._id,
+      totalVehicles: j.totalVehicles,
+      completedCount: j.completedCount,
+      serviceValue: Math.round(j.serviceValue * 100) / 100,
+      jobPaid: Math.round(j.jobPaid * 100) / 100,
+      collection: 0,
+      expenses: 0,
+      profit: 0,
+      outstanding: Math.max(0, Math.round((j.serviceValue - j.jobPaid) * 100) / 100)
+    };
+  });
+
+  paymentsAgg.forEach(p => {
+    if (!daysMap[p._id]) {
+      daysMap[p._id] = {
+        date: p._id,
+        totalVehicles: 0,
+        completedCount: 0,
+        serviceValue: 0,
+        jobPaid: 0,
+        collection: 0,
+        expenses: 0,
+        profit: 0,
+        outstanding: 0
+      };
+    }
+    daysMap[p._id].collection = Math.round(p.collection * 100) / 100;
+  });
+
+  expensesAgg.forEach(e => {
+    if (!daysMap[e._id]) {
+      daysMap[e._id] = {
+        date: e._id,
+        totalVehicles: 0,
+        completedCount: 0,
+        serviceValue: 0,
+        jobPaid: 0,
+        collection: 0,
+        expenses: 0,
+        profit: 0,
+        outstanding: 0
+      };
+    }
+    daysMap[e._id].expenses = Math.round(e.expenses * 100) / 100;
+  });
+
+  // Calculate day profits & month totals
+  let monthTotalVehicles = 0;
+  let monthServiceValue = 0;
+  let monthCollection = 0;
+  let monthExpenses = 0;
+
+  Object.keys(daysMap).forEach(k => {
+    const d = daysMap[k];
+    d.profit = Math.round((d.collection - d.expenses) * 100) / 100;
+    monthTotalVehicles += d.totalVehicles;
+    monthServiceValue += d.serviceValue;
+    monthCollection += d.collection;
+    monthExpenses += d.expenses;
+  });
+
+  const monthSummary = {
+    year,
+    month,
+    totalVehicles: monthTotalVehicles,
+    serviceValue: Math.round(monthServiceValue * 100) / 100,
+    collection: Math.round(monthCollection * 100) / 100,
+    expenses: Math.round(monthExpenses * 100) / 100,
+    profit: Math.round((monthCollection - monthExpenses) * 100) / 100,
+    outstanding: Math.max(0, Math.round((monthServiceValue - monthCollection) * 100) / 100)
+  };
+
+  return {
+    year,
+    month,
+    days: daysMap,
+    monthSummary
+  };
+};
+
 // CSV Export helper
 const exportToCSV = (headers, rows) => {
   const csvRows = [headers.join(',')];
@@ -803,6 +1012,7 @@ module.exports = {
   getWeeklyDashboard,
   getMonthlyDashboard,
   getDailyClosing,
+  getCalendarMonthData,
   globalSearch,
   exportToCSV
 };

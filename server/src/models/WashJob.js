@@ -6,6 +6,12 @@ const washJobSchema = new Schema({
     type: String,
     unique: true
   },
+  serviceDate: {
+    type: Date,
+    required: true,
+    default: Date.now,
+    index: true
+  },
   vehicleId: {
     type: Schema.Types.ObjectId,
     ref: 'Vehicle',
@@ -194,7 +200,7 @@ washJobSchema.pre('save', async function (next) {
 
   // Generate sequential token if new
   if (this.isNew && !this.tokenNumber) {
-    const jobDate = this.createdAt || new Date();
+    const jobDate = this.serviceDate || this.createdAt || new Date();
     const yyyy = jobDate.getFullYear();
     const mm = String(jobDate.getMonth() + 1).padStart(2, '0');
     const dd = String(jobDate.getDate()).padStart(2, '0');
@@ -207,7 +213,7 @@ washJobSchema.pre('save', async function (next) {
       endOfDay.setHours(23, 59, 59, 999);
 
       const countToday = await mongoose.model('WashJob').countDocuments({
-        createdAt: { $gte: startOfDay, $lte: endOfDay }
+        serviceDate: { $gte: startOfDay, $lte: endOfDay }
       });
 
       const sequence = String(countToday + 1).padStart(3, '0');
@@ -221,6 +227,10 @@ washJobSchema.pre('save', async function (next) {
   }
 });
 
+washJobSchema.index({ serviceDate: -1 });
+washJobSchema.index({ serviceDate: -1, status: 1 });
+washJobSchema.index({ serviceDate: -1, paymentStatus: 1 });
+washJobSchema.index({ vehicleReg: 1, serviceDate: -1 });
 washJobSchema.index({ createdAt: -1 });
 washJobSchema.index({ customerId: 1 });
 

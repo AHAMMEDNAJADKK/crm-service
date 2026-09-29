@@ -18,6 +18,7 @@ import Customers from './pages/admin/Customers';
 import Vehicles from './pages/admin/Vehicles';
 import WashJobs from './pages/admin/WashJobs';
 import ServiceHistory from './pages/admin/ServiceHistory';
+import ServiceCalendar from './pages/admin/ServiceCalendar';
 import PricingEditor from './pages/admin/PricingEditor';
 import Billing from './pages/admin/Billing';
 import Expenses from './pages/admin/Expenses';
@@ -118,6 +119,14 @@ export const App = () => {
           element={
             <AdminLayout onOpenNewService={() => setIsNewServiceModalOpen(true)}>
               <ServiceHistory />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="/admin/calendar"
+          element={
+            <AdminLayout onOpenNewService={() => setIsNewServiceModalOpen(true)}>
+              <ServiceCalendar />
             </AdminLayout>
           }
         />

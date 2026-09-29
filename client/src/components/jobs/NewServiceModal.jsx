@@ -12,7 +12,8 @@ import {
   FileText,
   Sparkles,
   Truck,
-  Bike
+  Bike,
+  Calendar
 } from 'lucide-react';
 import api from '../../services/api';
 import useUiStore from '../../store/uiStore';
@@ -36,11 +37,29 @@ const POPULAR_VEHICLES = [
   { name: 'Other', code: 'other' }
 ];
 
-export const NewServiceModal = ({ isOpen = true, onClose, onSuccess }) => {
+export const NewServiceModal = ({ isOpen = true, onClose, onSuccess, initialDate }) => {
   const queryClient = useQueryClient();
   const { addToast } = useUiStore();
 
-  // 1. Core Required Fields
+  // Helper to get formatted local YYYY-MM-DD
+  const getTodayStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // 1. Service Date (Defaults to today, owner can choose any day)
+  const [serviceDate, setServiceDate] = useState(() => initialDate || getTodayStr());
+
+  useEffect(() => {
+    if (initialDate) {
+      setServiceDate(initialDate);
+    }
+  }, [initialDate]);
+
+  // 2. Core Required Fields
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [vehicleType, setVehicleType] = useState('suv');
   const [amount, setAmount] = useState('700');
@@ -118,6 +137,8 @@ export const NewServiceModal = ({ isOpen = true, onClose, onSuccess }) => {
       queryClient.invalidateQueries({ queryKey: ['adminDashboardToday'] });
       queryClient.invalidateQueries({ queryKey: ['adminWashJobs'] });
       queryClient.invalidateQueries({ queryKey: ['adminBilling'] });
+      queryClient.invalidateQueries({ queryKey: ['adminCalendar'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDailyClosing'] });
       addToast(
         `Service recorded for ${res.data?.data?.vehicleReg || 'Vehicle'} (₹${res.data?.data?.finalAmount || amount})`,
         'success'
@@ -157,6 +178,8 @@ export const NewServiceModal = ({ isOpen = true, onClose, onSuccess }) => {
     }
 
     const payload = {
+      serviceDate,
+      date: serviceDate,
       vehicleNumber: cleanVeh,
       vehicleReg: cleanVeh,
       vehicleType,
@@ -190,7 +213,38 @@ export const NewServiceModal = ({ isOpen = true, onClose, onSuccess }) => {
           <span>Fast Owner Entry</span>
         </div>
 
-        {/* 1. Vehicle Number / Name (Required) */}
+        {/* 1. Service Date (Default Today, fully editable for past/future entries) */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-brand-500" />
+              Service Date <span className="text-red-500">*</span>
+            </label>
+            {serviceDate !== getTodayStr() && (
+              <button
+                type="button"
+                onClick={() => setServiceDate(getTodayStr())}
+                className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline cursor-pointer"
+              >
+                Reset to Today
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <input
+              type="date"
+              required
+              value={serviceDate}
+              onChange={(e) => setServiceDate(e.target.value)}
+              className="w-full text-sm font-bold px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-navy-600 bg-white dark:bg-navy-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-sm"
+            />
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Today is selected by default. Change date if recording an older day's vehicle or future booking.
+          </p>
+        </div>
+
+        {/* 2. Vehicle Number / Name (Required) */}
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
             Vehicle Number / Name <span className="text-red-500">*</span>

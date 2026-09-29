@@ -74,6 +74,8 @@ exports.calculatePrice = async (req, res, next) => {
 exports.createWashJob = async (req, res, next) => {
   try {
     const {
+      serviceDate,
+      date,
       vehicleReg,
       vehicleNumber,
       vehicleName,
@@ -95,6 +97,19 @@ exports.createWashJob = async (req, res, next) => {
       paymentChoice = 'paid', // 'paid', 'partial', 'unpaid'
       paymentMethod = 'cash'
     } = req.body;
+
+    // Parse business service date safely without UTC shifting
+    let resolvedServiceDate = new Date();
+    const rawDate = serviceDate || date;
+    if (rawDate) {
+      if (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+        const [y, m, d] = rawDate.split('-').map(Number);
+        resolvedServiceDate = new Date(y, m - 1, d, 12, 0, 0);
+      } else {
+        const parsed = new Date(rawDate);
+        if (!isNaN(parsed.getTime())) resolvedServiceDate = parsed;
+      }
+    }
 
     const rawVehicle = vehicleReg || vehicleNumber || vehicleName;
     if (!rawVehicle || !vehicleType) {
@@ -209,6 +224,7 @@ exports.createWashJob = async (req, res, next) => {
     }
 
     const newJob = new WashJob({
+      serviceDate: resolvedServiceDate,
       vehicleId: veh._id,
       vehicleReg: regUpper,
       vehicleType: vehicleType.toLowerCase(),
@@ -253,6 +269,7 @@ exports.createWashJob = async (req, res, next) => {
 
     // If upfront payment was made, record payment and invoice
     if (paidAmount > 0) {
+      const paymentDate = resolvedServiceDate || new Date();
       const paymentDoc = await Payment.create({
         jobId: newJob._id,
         customerId,
@@ -261,7 +278,7 @@ exports.createWashJob = async (req, res, next) => {
         serviceName,
         amount: paidAmount,
         paymentMethod,
-        date: new Date(),
+        date: paymentDate,
         notes: 'Initial service deposit / payment',
         createdBy: req.user?._id || null,
         staffName: req.user?.name || 'Admin'
@@ -283,9 +300,9 @@ exports.createWashJob = async (req, res, next) => {
           amount: paidAmount,
           method: paymentMethod,
           note: 'Initial deposit',
-          date: new Date()
+          date: paymentDate
         }],
-        paidAt: paymentStatus === 'paid' ? new Date() : null
+        paidAt: paymentStatus === 'paid' ? paymentDate : null
       });
 
       paymentDoc.invoiceId = invoice._id;
@@ -338,19 +355,33 @@ exports.createWashJob = async (req, res, next) => {
   }
 };
 
-// 3. Get Today's Vehicles / Active Jobs
+// 3. Get Today's / Specific Date's Vehicles & Active Jobs
 exports.getTodayJobs = async (req, res, next) => {
   try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    const { date } = req.query;
+    let target = new Date();
+    if (date) {
+      if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [y, m, d] = date.split('-').map(Number);
+        target = new Date(y, m - 1, d, 12, 0, 0);
+      } else {
+        const parsed = new Date(date);
+        if (!isNaN(parsed.getTime())) target = parsed;
+      }
+    }
+    const dayStart = new Date(target);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(target);
+    dayEnd.setHours(23, 59, 59, 999);
 
     const jobs = await WashJob.find({
-      createdAt: { $gte: todayStart, $lte: todayEnd }
+      $or: [
+        { serviceDate: { $gte: dayStart, $lte: dayEnd } },
+        { serviceDate: { $exists: false }, createdAt: { $gte: dayStart, $lte: dayEnd } }
+      ]
     })
       .populate('customerId', 'name nameMalayalam mobile place')
-      .sort({ createdAt: -1 });
+      .sort({ serviceDate: -1, createdAt: -1 });
 
     res.status(200).json({ success: true, data: jobs });
   } catch (err) {
@@ -358,10 +389,10 @@ exports.getTodayJobs = async (req, res, next) => {
   }
 };
 
-// 4. Get Wash Jobs (paginated, filtered, searchable)
+// 4. Get Wash Jobs (paginated, filtered, searchable, date-aware)
 exports.getWashJobs = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, search = '', status, paymentStatus, startDate, endDate } = req.query;
+    const { page = 1, limit = 20, search = '', status, paymentStatus, date, startDate, endDate } = req.query;
     const skip = (page - 1) * limit;
 
     const filter = {};
@@ -377,18 +408,51 @@ exports.getWashJobs = async (req, res, next) => {
       filter.paymentStatus = paymentStatus;
     }
 
-    if (startDate || endDate) {
-      filter.createdAt = {};
+    // Specific single date filter (e.g., date=2026-09-28)
+    if (date) {
+      let target = new Date();
+      if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [y, m, d] = date.split('-').map(Number);
+        target = new Date(y, m - 1, d, 12, 0, 0);
+      } else {
+        const parsed = new Date(date);
+        if (!isNaN(parsed.getTime())) target = parsed;
+      }
+      const dayStart = new Date(target);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(target);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      filter.$or = [
+        { serviceDate: { $gte: dayStart, $lte: dayEnd } },
+        { serviceDate: { $exists: false }, createdAt: { $gte: dayStart, $lte: dayEnd } }
+      ];
+    } else if (startDate || endDate) {
+      const dateRange = {};
       if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        filter.createdAt.$gte = start;
+        let s = new Date(startDate);
+        if (typeof startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+          const [y, m, d] = startDate.split('-').map(Number);
+          s = new Date(y, m - 1, d, 0, 0, 0);
+        } else {
+          s.setHours(0, 0, 0, 0);
+        }
+        dateRange.$gte = s;
       }
       if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        filter.createdAt.$lte = end;
+        let e = new Date(endDate);
+        if (typeof endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+          const [y, m, d] = endDate.split('-').map(Number);
+          e = new Date(y, m - 1, d, 23, 59, 59, 999);
+        } else {
+          e.setHours(23, 59, 59, 999);
+        }
+        dateRange.$lte = e;
       }
+      filter.$or = [
+        { serviceDate: dateRange },
+        { serviceDate: { $exists: false }, createdAt: dateRange }
+      ];
     }
 
     if (search) {
@@ -483,6 +547,10 @@ exports.updateWashJob = async (req, res, next) => {
     if (waterUsedLitres !== undefined) job.waterUsedLitres = parseFloat(waterUsedLitres) || 0;
     if (bayNumber !== undefined) job.bayNumber = bayNumber ? parseInt(bayNumber) : null;
     if (notes !== undefined) job.notes = notes;
+    if (req.body.serviceDate) {
+      const parsed = new Date(req.body.serviceDate);
+      if (!isNaN(parsed.getTime())) job.serviceDate = parsed;
+    }
 
     if (discount !== undefined) job.discount = Math.max(0, parseFloat(discount) || 0);
     if (additionalCharge !== undefined) job.additionalCharge = Math.max(0, parseFloat(additionalCharge) || 0);
