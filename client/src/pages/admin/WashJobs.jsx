@@ -19,7 +19,8 @@ import {
   Upload,
   AlertTriangle,
   Droplet,
-  DollarSign
+  DollarSign,
+  Calendar
 } from 'lucide-react';
 
 import api from '../../services/api';
@@ -140,6 +141,17 @@ export const WashJobs = () => {
     }
   };
 
+  const getTodayStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = getTodayStr();
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState('kanban');
 
@@ -181,12 +193,12 @@ export const WashJobs = () => {
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
   const [paymentMethod, setPaymentMethod] = useState('pending');
 
-  // Queries
+  // Queries (filtered by selectedDate)
   const { data: jobsList = [], isLoading: isJobsLoading } = useQuery({
-    queryKey: ['adminWashJobs', search],
+    queryKey: ['adminWashJobs', selectedDate, search],
     queryFn: async () => {
       const { data } = await api.get('/api/v1/admin/jobs', {
-        params: { limit: 100, search }
+        params: { limit: 100, search, date: selectedDate }
       });
       return data.data;
     }
@@ -357,44 +369,168 @@ export const WashJobs = () => {
     cancelled: 'Cancelled'
   };
 
+  // Daily summary totals for the selected service date
+  const totalVehicles = jobsList.length;
+  const serviceValue = jobsList.reduce((acc, j) => acc + (j.finalAmount || j.price || 0), 0);
+  const collection = jobsList.reduce((acc, j) => acc + (j.amountPaid || 0), 0);
+  const outstanding = jobsList.reduce((acc, j) => acc + (j.balance || 0), 0);
+
+  const formattedDayTitle = (() => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    return dateObj.toLocaleDateString('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  })();
+
+  const isTodaySelected = selectedDate === todayStr;
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       
-      {/* Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/50 shadow-xs">
+      {/* Title & View Toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-navy-800 p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-navy-700 shadow-xs">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Active Wash Jobs</h1>
-          <p className="text-xs text-slate-400 mt-1">Manage cleaning bays, log water volume consumption, and process checkout payments.</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white tracking-tight">
+              Today's Services
+            </h1>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-950/80 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
+              {isTodaySelected ? 'Today' : formattedDayTitle}
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Service records for {formattedDayTitle}. Inspect wash bay status, collections, and outstanding dues.
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* View toggle */}
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+          <div className="inline-flex rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 p-1">
             <button
               onClick={() => setViewMode('kanban')}
               className={`p-1.5 rounded-md cursor-pointer ${
-                viewMode === 'kanban' ? 'bg-brand-50 text-brand-600' : 'text-slate-500'
+                viewMode === 'kanban' ? 'bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400' : 'text-slate-500'
               }`}
+              title="Kanban View"
             >
               <Grid className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded-md cursor-pointer ${
-                viewMode === 'list' ? 'bg-brand-50 text-brand-600' : 'text-slate-500'
+                viewMode === 'list' ? 'bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400' : 'text-slate-500'
               }`}
+              title="List View"
             >
               <List className="w-4 h-4" />
             </button>
           </div>
 
           <Button onClick={() => setIsCreatorOpen(true)} icon={Plus}>
-            Walk-in Check-in
+            + Add Vehicle ({selectedDate})
           </Button>
         </div>
       </div>
 
+      {/* Date Navigation & Summary KPI Bar */}
+      <div className="bg-white dark:bg-navy-800 p-4 rounded-2xl border border-slate-200 dark:border-navy-700 shadow-xs space-y-3">
+        {/* Date Selector Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-navy-700/60">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setSelectedDate(todayStr)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                isTodaySelected
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const y = new Date();
+                y.setDate(y.getDate() - 1);
+                const yStr = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
+                setSelectedDate(yStr);
+              }}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 transition-all cursor-pointer"
+            >
+              Yesterday
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-brand-500" />
+              Selected Date:
+            </span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-300 dark:border-navy-600 bg-white dark:bg-navy-900 text-slate-900 dark:text-white"
+            />
+          </div>
+        </div>
+
+        {/* 4 Summary Metric Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-900/60 border border-slate-100 dark:border-navy-700/60 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+              <Car className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Vehicles</span>
+              <span className="text-base font-black text-slate-900 dark:text-white font-mono">{totalVehicles}</span>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-900/60 border border-slate-100 dark:border-navy-700/60 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-navy-700 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+              <Tag className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Service Value</span>
+              <span className="text-base font-black text-slate-800 dark:text-slate-200 font-mono">
+                {formatCurrency(serviceValue)}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <IndianRupee className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400 block">Collection</span>
+              <span className="text-base font-black text-blue-700 dark:text-blue-300 font-mono">
+                {formatCurrency(collection)}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 block">Outstanding</span>
+              <span className="text-base font-black text-amber-700 dark:text-amber-300 font-mono">
+                {formatCurrency(outstanding)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Search Filter */}
-      <div className="bg-white p-4 border border-slate-200/60 rounded-xl flex items-center justify-between shadow-xs">
+      <div className="bg-white dark:bg-navy-800 p-3 sm:p-4 border border-slate-200 dark:border-navy-700 rounded-xl flex items-center justify-between shadow-xs">
         <div className="relative max-w-sm w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
           <input
@@ -820,6 +956,7 @@ export const WashJobs = () => {
       {/* New Service Creation Modal */}
       {isCreatorOpen && (
         <NewServiceModal
+          initialDate={selectedDate}
           onClose={() => setIsCreatorOpen(false)}
           onSuccess={() => {
             setIsCreatorOpen(false);

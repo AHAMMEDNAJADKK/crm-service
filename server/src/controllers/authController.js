@@ -124,6 +124,8 @@ const refresh = async (req, res) => {
       const { parseCookies } = require('../middleware/auth');
       const cookies = parseCookies(req.headers.cookie);
       token = cookies.refreshToken;
+    }
+
     // Also allow body fallback for cross-origin environments where cookies might be suppressed
     if (!token && req.body?.refreshToken) {
       token = req.body.refreshToken;

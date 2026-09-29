@@ -59,6 +59,13 @@ export const Dashboard = ({ onOpenNewService }) => {
   // Chart range: '7d' or '30d'
   const [chartRange, setChartRange] = useState('7d');
 
+  // Date Context Filter: 'today', 'yesterday', 'this-week', 'this-month', 'custom'
+  const [dateFilter, setDateFilter] = useState('today');
+  const [customDate, setCustomDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+
   // Modals state
   const [isInternalNewServiceOpen, setIsInternalNewServiceOpen] = useState(false);
   const [paymentModalJob, setPaymentModalJob] = useState(null);
@@ -66,15 +73,20 @@ export const Dashboard = ({ onOpenNewService }) => {
 
   const handleOpenNewService = onOpenNewService || (() => setIsInternalNewServiceOpen(true));
 
-  // 1. Fetch unified Today's Dashboard stats & analytics in ONE fast call
+  // 1. Fetch unified Dashboard stats & analytics matching the active date context
   const {
     data: dashboardData,
     isLoading: isDashboardLoading,
     refetch: refetchDashboard
   } = useQuery({
-    queryKey: ['adminDashboardToday'],
+    queryKey: ['adminDashboardToday', dateFilter, customDate],
     queryFn: async () => {
-      const res = await api.get('/api/v1/admin/reports/today');
+      const res = await api.get('/api/v1/admin/reports/today', {
+        params: {
+          filter: dateFilter,
+          date: dateFilter === 'custom' ? customDate : undefined
+        }
+      });
       return res.data?.data;
     }
   });
@@ -191,13 +203,93 @@ export const Dashboard = ({ onOpenNewService }) => {
         />
       </div>
 
+      {/* Date Filter Context Selector Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl shadow-xs">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mr-1 flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-brand-600" />
+            Filter Period:
+          </span>
+          <button
+            type="button"
+            onClick={() => setDateFilter('today')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+              dateFilter === 'today'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-navy-700'
+            }`}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => setDateFilter('yesterday')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+              dateFilter === 'yesterday'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-navy-700'
+            }`}
+          >
+            Yesterday
+          </button>
+          <button
+            type="button"
+            onClick={() => setDateFilter('this-week')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+              dateFilter === 'this-week'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-navy-700'
+            }`}
+          >
+            This Week
+          </button>
+          <button
+            type="button"
+            onClick={() => setDateFilter('this-month')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+              dateFilter === 'this-month'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-navy-700'
+            }`}
+          >
+            This Month
+          </button>
+
+          {/* Custom Date Input */}
+          <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-navy-700">
+            <span className="text-[11px] font-bold text-slate-400">Custom:</span>
+            <input
+              type="date"
+              value={customDate}
+              onChange={(e) => {
+                setCustomDate(e.target.value);
+                setDateFilter('custom');
+              }}
+              className={`px-2.5 py-1 text-xs font-bold rounded-xl border transition-all ${
+                dateFilter === 'custom'
+                  ? 'bg-brand-50 dark:bg-brand-950/40 border-brand-500 text-brand-700 dark:text-brand-300'
+                  : 'bg-slate-100 dark:bg-navy-900 border-slate-200 dark:border-navy-700 text-slate-700 dark:text-slate-300'
+              }`}
+            />
+          </div>
+        </div>
+
+        <Link
+          to="/admin/calendar"
+          className="inline-flex items-center gap-1.5 text-xs font-black text-brand-600 dark:text-brand-400 hover:underline"
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          Full Service Calendar &rarr;
+        </Link>
+      </div>
+
       {/* 2. Top 8 Colorful KPI Cards (Controlled High-Readability Palette) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-3.5">
-        {/* 1. TODAY'S VEHICLES (Blue) */}
+        {/* 1. VEHICLES (Blue) */}
         <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Today's Vehicles
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+              {dateFilter === 'today' ? "Today's" : dateFilter === 'yesterday' ? "Yesterday's" : dateFilter === 'this-week' ? 'This Week' : dateFilter === 'this-month' ? 'This Month' : customDate} Vehicles
             </span>
             <div className="p-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
               <Car className="w-3.5 h-3.5" />
@@ -206,13 +298,13 @@ export const Dashboard = ({ onOpenNewService }) => {
           <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">
             {today.totalVehicles}
           </div>
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Recorded today</p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Recorded count</p>
         </div>
 
-        {/* 2. TODAY'S SERVICE VALUE (Indigo) */}
+        {/* 2. SERVICE VALUE (Indigo) */}
         <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 truncate">
               Service Value
             </span>
             <div className="p-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
@@ -225,10 +317,10 @@ export const Dashboard = ({ onOpenNewService }) => {
           <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Total work value</p>
         </div>
 
-        {/* 3. TODAY'S COLLECTION (Emerald) */}
+        {/* 3. COLLECTION (Emerald) */}
         <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-emerald-200/60 dark:border-emerald-900/40 shadow-2xs hover:shadow-sm transition-all bg-emerald-50/20 dark:bg-emerald-950/10">
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 truncate">
               Collection
             </span>
             <div className="p-1 rounded-lg bg-emerald-100/80 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
@@ -244,7 +336,7 @@ export const Dashboard = ({ onOpenNewService }) => {
         {/* 4. OUTSTANDING (Amber) */}
         <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 truncate">
               Outstanding
             </span>
             <div className="p-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
@@ -257,10 +349,10 @@ export const Dashboard = ({ onOpenNewService }) => {
           <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Pending payment</p>
         </div>
 
-        {/* 5. TODAY'S EXPENSES (Rose) */}
+        {/* 5. EXPENSES (Rose) */}
         <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 shadow-2xs hover:shadow-sm transition-all">
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 dark:text-rose-400">
+            <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 dark:text-rose-400 truncate">
               Expenses
             </span>
             <div className="p-1 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
@@ -270,14 +362,14 @@ export const Dashboard = ({ onOpenNewService }) => {
           <div className="text-base sm:text-lg font-black text-rose-600 dark:text-rose-400 font-mono truncate">
             {formatCurrency(today.expenses)}
           </div>
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Money spent today</p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">Money spent</p>
         </div>
 
-        {/* 6. TODAY'S PROFIT (Purple - True Cash Profit) */}
+        {/* 6. PROFIT (Purple - True Cash Profit) */}
         <div className="p-3.5 rounded-2xl bg-white dark:bg-navy-800 border border-purple-200/60 dark:border-purple-900/40 shadow-2xs hover:shadow-sm transition-all bg-purple-50/20 dark:bg-purple-950/10">
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-400">
-              Today's Profit
+            <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-400 truncate">
+              {dateFilter === 'today' ? "Today's" : dateFilter === 'yesterday' ? "Yesterday's" : 'Period'} Profit
             </span>
             <div className="p-1 rounded-lg bg-purple-100/80 dark:bg-purple-950 text-purple-600 dark:text-purple-400">
               <Sparkles className="w-3.5 h-3.5" />
@@ -569,9 +661,11 @@ export const Dashboard = ({ onOpenNewService }) => {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900 dark:text-white">
-              Today's Services Activity
+              {dateFilter === 'today' ? "Today's" : dateFilter === 'yesterday' ? "Yesterday's" : dateFilter === 'this-week' ? 'This Week' : dateFilter === 'this-month' ? 'This Month' : customDate} Services Activity
             </h2>
-            <p className="text-xs text-slate-500">Live service log for today.</p>
+            <p className="text-xs text-slate-500">
+              Services recorded for {dateFilter === 'today' ? 'today' : dateFilter === 'yesterday' ? 'yesterday' : dateFilter === 'this-week' ? 'this week' : dateFilter === 'this-month' ? 'this month' : customDate}.
+            </p>
           </div>
           <Button
             size="sm"
@@ -587,8 +681,8 @@ export const Dashboard = ({ onOpenNewService }) => {
         {todayVehicles.length === 0 ? (
           <div className="py-12 text-center text-slate-400 text-xs">
             <Car className="w-8 h-8 mx-auto text-slate-300 mb-2 opacity-50" />
-            <p className="font-bold">No vehicles recorded today.</p>
-            <p className="text-[11px] mt-0.5">Click "+ Add Vehicle" to log your first service.</p>
+            <p className="font-bold">No vehicles recorded for this period.</p>
+            <p className="text-[11px] mt-0.5">Click "+ Add Vehicle" to log a service.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -612,7 +706,9 @@ export const Dashboard = ({ onOpenNewService }) => {
                   return (
                     <tr key={j._id} className="hover:bg-slate-50/50 dark:hover:bg-navy-750 transition-colors">
                       <td className="py-3 px-3 text-slate-400 font-mono whitespace-nowrap">
-                        {new Date(j.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        {dateFilter === 'today'
+                          ? new Date(j.createdAt || j.serviceDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                          : formatDate(j.serviceDate || j.createdAt)}
                       </td>
                       <td className="py-3 px-3 font-black text-slate-900 dark:text-white font-mono uppercase tracking-wider whitespace-nowrap">
                         {j.vehicleReg}
