@@ -49,7 +49,7 @@ const AdminLayout = ({ children, onOpenNewService }) => {
       <AdminSidebar onOpenNewService={onOpenNewService} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <AdminHeader onOpenNewService={onOpenNewService} />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-slate-50/50 dark:bg-navy-900/50 transition-colors">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8 bg-slate-50/50 dark:bg-navy-900/50 transition-colors">
           {children}
         </main>
       </div>
@@ -58,8 +58,10 @@ const AdminLayout = ({ children, onOpenNewService }) => {
 };
 
 export const App = () => {
-  const { checkAuth, isCheckingAuth } = useAuthStore();
-  const { fetchStationSettings, initTheme } = useUiStore();
+  const checkAuth = useAuthStore((state) => state.checkAuth);
+  const isCheckingAuth = useAuthStore((state) => state.isCheckingAuth);
+  const fetchStationSettings = useUiStore((state) => state.fetchStationSettings);
+  const initTheme = useUiStore((state) => state.initTheme);
   const [isNewServiceModalOpen, setIsNewServiceModalOpen] = useState(false);
 
   useEffect(() => {

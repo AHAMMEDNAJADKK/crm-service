@@ -685,44 +685,127 @@ export const Dashboard = ({ onOpenNewService }) => {
             <p className="text-[11px] mt-0.5">Click "+ Add Vehicle" to log a service.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-navy-900/60 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-wider">
-                <tr>
-                  <th className="py-2.5 px-3">Time</th>
-                  <th className="py-2.5 px-3">Vehicle</th>
-                  <th className="py-2.5 px-3">Category</th>
-                  <th className="py-2.5 px-3">Service</th>
-                  <th className="py-2.5 px-3">Amount</th>
-                  <th className="py-2.5 px-3">Payment</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-navy-700">
-                {todayVehicles.map((j) => {
-                  const isPaid = j.paymentStatus === 'paid';
-                  const isPartial = j.paymentStatus === 'partial';
-                  return (
-                    <tr key={j._id} className="hover:bg-slate-50/50 dark:hover:bg-navy-750 transition-colors">
-                      <td className="py-3 px-3 text-slate-400 font-mono whitespace-nowrap">
-                        {dateFilter === 'today'
-                          ? new Date(j.createdAt || j.serviceDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                          : formatDate(j.serviceDate || j.createdAt)}
-                      </td>
-                      <td className="py-3 px-3 font-black text-slate-900 dark:text-white font-mono uppercase tracking-wider whitespace-nowrap">
-                        {j.vehicleReg}
-                      </td>
-                      <td className="py-3 px-3 uppercase text-slate-600 dark:text-slate-300 font-bold whitespace-nowrap">
-                        {j.vehicleType}
-                      </td>
-                      <td className="py-3 px-3 text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
-                        {j.serviceName || 'General Service'}
-                      </td>
-                      <td className="py-3 px-3 font-black text-slate-900 dark:text-white font-mono whitespace-nowrap">
+          <div>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-navy-900/60 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                  <tr>
+                    <th className="py-2.5 px-3">Time</th>
+                    <th className="py-2.5 px-3">Vehicle</th>
+                    <th className="py-2.5 px-3">Category</th>
+                    <th className="py-2.5 px-3">Service</th>
+                    <th className="py-2.5 px-3">Amount</th>
+                    <th className="py-2.5 px-3">Payment</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-navy-700">
+                  {todayVehicles.map((j) => {
+                    const isPaid = j.paymentStatus === 'paid';
+                    const isPartial = j.paymentStatus === 'partial';
+                    return (
+                      <tr key={j._id} className="hover:bg-slate-50/50 dark:hover:bg-navy-750 transition-colors">
+                        <td className="py-3 px-3 text-slate-400 font-mono whitespace-nowrap">
+                          {dateFilter === 'today'
+                            ? new Date(j.createdAt || j.serviceDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                            : formatDate(j.serviceDate || j.createdAt)}
+                        </td>
+                        <td className="py-3 px-3 font-black text-slate-900 dark:text-white font-mono uppercase tracking-wider whitespace-nowrap">
+                          {j.vehicleReg}
+                        </td>
+                        <td className="py-3 px-3 uppercase text-slate-600 dark:text-slate-300 font-bold whitespace-nowrap">
+                          {j.vehicleType}
+                        </td>
+                        <td className="py-3 px-3 text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
+                          {j.serviceName || 'General Service'}
+                        </td>
+                        <td className="py-3 px-3 font-black text-slate-900 dark:text-white font-mono whitespace-nowrap">
+                          {formatCurrency(j.finalAmount || j.price)}
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                              isPaid
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : isPartial
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                            }`}
+                          >
+                            {j.paymentStatus}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 capitalize">
+                            {j.status || 'Waiting'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {j.balance > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setPaymentModalJob(j)}
+                                className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px]"
+                              >
+                                + Pay
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setReceiptModalJob(j)}
+                              className="p-1 rounded text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
+                              title="Print / View Receipt"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
+                            {j.status !== 'completed' && j.status !== 'delivered' && (
+                              <button
+                                type="button"
+                                onClick={() => completeMutation.mutate(j._id)}
+                                className="p-1 rounded text-slate-400 hover:text-emerald-600"
+                                title="Mark Completed"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View (Part 14 & 15) */}
+            <div className="md:hidden flex flex-col gap-3">
+              {todayVehicles.map((j) => {
+                const isPaid = j.paymentStatus === 'paid';
+                const isPartial = j.paymentStatus === 'partial';
+                return (
+                  <div
+                    key={j._id}
+                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-navy-900/60 border border-slate-200 dark:border-navy-700 flex flex-col gap-2.5"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="font-mono font-black text-sm text-slate-900 dark:text-white uppercase tracking-wider block">
+                          {j.vehicleReg}
+                        </span>
+                        <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-0.5">
+                          {j.vehicleType} • {j.serviceName || 'General Service'}
+                        </div>
+                      </div>
+                      <span className="font-mono font-black text-sm text-slate-900 dark:text-white">
                         {formatCurrency(j.finalAmount || j.price)}
-                      </td>
-                      <td className="py-3 px-3 whitespace-nowrap">
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-navy-700/60">
+                      <div className="flex items-center gap-2">
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
                             isPaid
@@ -734,48 +817,35 @@ export const Dashboard = ({ onOpenNewService }) => {
                         >
                           {j.paymentStatus}
                         </span>
-                      </td>
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 capitalize">
+                        <span className="text-[10px] text-slate-400 capitalize">
                           {j.status || 'Waiting'}
                         </span>
-                      </td>
-                      <td className="py-3 px-3 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {j.balance > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setPaymentModalJob(j)}
-                              className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px]"
-                            >
-                              + Pay
-                            </button>
-                          )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {j.balance > 0 && (
                           <button
                             type="button"
-                            onClick={() => setReceiptModalJob(j)}
-                            className="p-1 rounded text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
-                            title="Print / View Receipt"
+                            onClick={() => setPaymentModalJob(j)}
+                            className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-black text-xs"
                           >
-                            <FileText className="w-4 h-4" />
+                            + Pay {formatCurrency(j.balance)}
                           </button>
-                          {j.status !== 'completed' && j.status !== 'delivered' && (
-                            <button
-                              type="button"
-                              onClick={() => completeMutation.mutate(j._id)}
-                              className="p-1 rounded text-slate-400 hover:text-emerald-600"
-                              title="Mark Completed"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setReceiptModalJob(j)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-brand-600 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700"
+                          title="Receipt"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const env = require('../config/env');
 const User = require('../models/User');
 
@@ -30,7 +31,8 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
     }
 
-    if (!token) {
+    // Filter out missing or stringified falsy tokens
+    if (!token || token === 'null' || token === 'undefined' || token === '""') {
       return res.status(401).json({
         success: false,
         error: 'Not authorized, token missing',
@@ -39,14 +41,46 @@ const protect = async (req, res, next) => {
     }
 
     // Verify token
-    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
+    } catch (jwtError) {
+      if (!res.headersSent) {
+        res.setHeader('Set-Cookie', [
+          'accessToken=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+          'refreshToken=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+        ]);
+      }
+      return res.status(401).json({
+        success: false,
+        error: 'Not authorized, token invalid or expired',
+        code: 401
+      });
+    }
+
+    if (!decoded || !decoded.id) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authorized, invalid token payload',
+        code: 401
+      });
+    }
+
+    // Check MongoDB connection readiness
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database connection temporarily unavailable',
+        code: 503
+      });
+    }
 
     // Get user from DB
     const user = await User.findById(decoded.id).select('-passwordHash');
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'User not found',
+        error: 'User not found or account deactivated',
         code: 401
       });
     }
@@ -56,18 +90,16 @@ const protect = async (req, res, next) => {
   } catch (error) {
     console.error('JWT Auth Error:', error.message);
     
-    // Clear cookies if token is invalid or expired
-    res.clearCookie && res.clearCookie('accessToken');
-    res.clearCookie && res.clearCookie('refreshToken');
-    
-    res.setHeader('Set-Cookie', [
-      'accessToken=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
-      'refreshToken=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
-    ]);
+    if (!res.headersSent) {
+      res.setHeader('Set-Cookie', [
+        'accessToken=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+        'refreshToken=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      ]);
+    }
 
     return res.status(401).json({
       success: false,
-      error: 'Not authorized, token invalid or expired',
+      error: 'Not authorized, authentication failed',
       code: 401
     });
   }

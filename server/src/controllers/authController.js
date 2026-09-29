@@ -179,6 +179,13 @@ const refresh = async (req, res) => {
 
 const getMe = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authorized, user profile not available',
+        code: 401
+      });
+    }
     res.status(200).json({
       success: true,
       data: {
@@ -189,7 +196,8 @@ const getMe = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message, code: 500 });
+    console.error('getMe controller error:', error);
+    res.status(500).json({ success: false, error: 'Failed to retrieve user profile', code: 500 });
   }
 };
 

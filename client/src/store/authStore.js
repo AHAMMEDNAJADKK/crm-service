@@ -11,6 +11,15 @@ const useAuthStore = create((set) => ({
 
   // Verify if owner session is active (runs at application startup)
   checkAuth: async () => {
+    const localToken = localStorage.getItem('crm_auth_token');
+    const refreshToken = localStorage.getItem('crm_refresh_token');
+    const hasCookie = typeof document !== 'undefined' && (document.cookie.includes('accessToken') || document.cookie.includes('refreshToken'));
+
+    if (!localToken && !refreshToken && !hasCookie) {
+      set({ user: null, isAuthenticated: false, isCheckingAuth: false });
+      return;
+    }
+
     set({ isCheckingAuth: true });
     try {
       const response = await api.get('/api/v1/auth/me');

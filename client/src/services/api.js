@@ -47,6 +47,12 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
+      const refreshToken = localStorage.getItem('crm_refresh_token');
+      // If there is no refresh token stored, do not attempt futile refresh
+      if (!refreshToken) {
+        return Promise.reject(error);
+      }
+
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -64,7 +70,6 @@ api.interceptors.response.use(
 
       try {
         // Attempt to call refresh endpoint
-        const refreshToken = localStorage.getItem('crm_refresh_token');
         const refreshRes = await axios.post(`${rawBaseURL}/api/v1/auth/refresh`, { refreshToken }, { withCredentials: true });
         if (refreshRes.data?.data?.token) {
           localStorage.setItem('crm_auth_token', refreshRes.data.data.token);

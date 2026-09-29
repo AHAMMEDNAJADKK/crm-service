@@ -6,22 +6,37 @@ const WashPackagePrice = require('../models/WashPackagePrice');
 const VehicleType = require('../models/VehicleType');
 const ServicePackage = require('../models/ServicePackage');
 
+const DEFAULT_STATION_SETTINGS = {
+  stationName: 'AHAMMED SONS WATER SERVICE',
+  tagline: 'Vehicle Washing, Cleaning & Underbody/Undercoating Services',
+  address: 'Kozhikode, Kerala',
+  mobile: '9539691738',
+  alternatePhone: '',
+  email: 'contact@ahammedsons.com',
+  logoUrl: '/uploads/logo/station-logo.jpg',
+  logoPath: 'uploads/logo/station-logo.jpg',
+  receiptFooter: 'Thank you for choosing AHAMMED SONS WATER SERVICE! Visit us again.',
+  workingHours: {
+    opensAt: '08:00 AM',
+    closesAt: '08:00 PM',
+    daysOpen: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  }
+};
+
 // Get settings
 const getSettings = async (req, res, next) => {
   try {
-    let settings = await Settings.findOne();
-    if (!settings) {
-      settings = await Settings.create({
-        stationName: 'AHAMMED SONS WATER SERVICE',
-        tagline: 'Vehicle Washing, Cleaning & Underbody/Undercoating Services',
-        address: 'Kozhikode, Kerala',
-        mobile: '9539691738',
-        email: 'contact@ahammedsons.com',
-        logoUrl: '/uploads/logo/station-logo.jpg',
-        logoPath: 'uploads/logo/station-logo.jpg'
-      });
+    let settings = null;
+    try {
+      settings = await Settings.findOne();
+      if (!settings) {
+        settings = await Settings.create(DEFAULT_STATION_SETTINGS);
+      }
+    } catch (dbErr) {
+      console.warn('⚠️ Could not query settings from DB:', dbErr.message);
+      return res.status(200).json({ success: true, data: DEFAULT_STATION_SETTINGS });
     }
-    res.status(200).json({ success: true, data: settings });
+    return res.status(200).json({ success: true, data: settings || DEFAULT_STATION_SETTINGS });
   } catch (error) {
     next(error);
   }
@@ -301,36 +316,51 @@ const changeOwnerPIN = async (req, res, next) => {
   }
 };
 
-// Public Settings endpoint
-const getPublicSettings = async (req, res, next) => {
+// Public Settings endpoint - safe, non-crashing with reliable fallback
+const getPublicSettings = async (req, res) => {
   try {
-    let settings = await Settings.findOne();
-    if (!settings) {
-      settings = await Settings.create({
-        stationName: 'AHAMMED SONS WATER SERVICE',
-        tagline: 'Vehicle Washing, Cleaning & Underbody/Undercoating Services',
-        address: 'Kozhikode, Kerala',
-        mobile: '9539691738',
-        email: 'contact@ahammedsons.com',
-        logoUrl: '/uploads/logo/station-logo.jpg'
-      });
+    let settings = null;
+    try {
+      settings = await Settings.findOne().lean();
+      if (!settings) {
+        settings = await Settings.create(DEFAULT_STATION_SETTINGS);
+      }
+    } catch (dbErr) {
+      console.warn('⚠️ Could not load settings from DB, using safe business defaults:', dbErr.message);
+      settings = DEFAULT_STATION_SETTINGS;
     }
-    res.status(200).json({
+
+    const current = settings || DEFAULT_STATION_SETTINGS;
+    return res.status(200).json({
       success: true,
       data: {
-        stationName: settings.stationName,
-        tagline: settings.tagline,
-        address: settings.address,
-        mobile: settings.mobile,
-        alternatePhone: settings.alternatePhone,
-        email: settings.email,
-        logoUrl: settings.logoUrl,
-        receiptFooter: settings.receiptFooter,
-        workingHours: settings.workingHours
+        stationName: current.stationName || DEFAULT_STATION_SETTINGS.stationName,
+        tagline: current.tagline || DEFAULT_STATION_SETTINGS.tagline,
+        address: current.address || DEFAULT_STATION_SETTINGS.address,
+        mobile: current.mobile || DEFAULT_STATION_SETTINGS.mobile,
+        alternatePhone: current.alternatePhone || '',
+        email: current.email || DEFAULT_STATION_SETTINGS.email,
+        logoUrl: current.logoUrl || DEFAULT_STATION_SETTINGS.logoUrl,
+        receiptFooter: current.receiptFooter || DEFAULT_STATION_SETTINGS.receiptFooter,
+        workingHours: current.workingHours || DEFAULT_STATION_SETTINGS.workingHours
       }
     });
   } catch (error) {
-    next(error);
+    console.error('getPublicSettings unexpected error:', error);
+    return res.status(200).json({
+      success: true,
+      data: {
+        stationName: DEFAULT_STATION_SETTINGS.stationName,
+        tagline: DEFAULT_STATION_SETTINGS.tagline,
+        address: DEFAULT_STATION_SETTINGS.address,
+        mobile: DEFAULT_STATION_SETTINGS.mobile,
+        alternatePhone: '',
+        email: DEFAULT_STATION_SETTINGS.email,
+        logoUrl: DEFAULT_STATION_SETTINGS.logoUrl,
+        receiptFooter: DEFAULT_STATION_SETTINGS.receiptFooter,
+        workingHours: DEFAULT_STATION_SETTINGS.workingHours
+      }
+    });
   }
 };
 
