@@ -171,75 +171,112 @@ export const Billing = () => {
           ) : paymentsList.length === 0 ? (
             <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-xs">No income or payment records found.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50/80 dark:bg-navy-850 border-b border-slate-200 dark:border-navy-700 text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">
-                    <th className="py-3 px-4">Payment ID</th>
-                    <th className="py-3 px-4">Date & Time</th>
-                    <th className="py-3 px-4">Vehicle Number</th>
-                    <th className="py-3 px-4">Customer</th>
-                    <th className="py-3 px-4">Service</th>
-                    <th className="py-3 px-4">Mode</th>
-                    <th className="py-3 px-4 text-right">Amount</th>
-                    <th className="py-3 px-4">Staff</th>
-                    <th className="py-3 px-4 text-right">Receipt</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-navy-750">
-                  {paymentsList.map(pay => (
-                    <tr key={pay._id} className="hover:bg-slate-50/60 dark:hover:bg-navy-750/50 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-800 dark:text-slate-200">
-                        {pay.paymentId}
-                      </td>
-
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
-                        {formatDate(pay.date, true)}
-                      </td>
-
-                      <td className="py-3 px-4 font-mono font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                        {pay.vehicleReg}
-                      </td>
-
-                      <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">
-                        {pay.customerName || 'Walk-in'}
-                      </td>
-
-                      <td className="py-3 px-4 capitalize text-slate-600 dark:text-slate-400">
-                        {pay.serviceName}
-                      </td>
-
-                      <td className="py-3 px-4">
-                        <span className="font-bold uppercase text-[10px] bg-slate-100 dark:bg-navy-750 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded">
-                          {pay.paymentMethod}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-4 text-right font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                        {formatCurrency(pay.amount)}
-                      </td>
-
-                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
-                        {pay.staffName || 'Admin'}
-                      </td>
-
-                      <td className="py-3 px-4 text-right">
-                        {pay.jobId && (
-                          <button
-                            type="button"
-                            onClick={() => setReceiptModalJob(pay.jobId)}
-                            className="p-1.5 rounded-lg border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors cursor-pointer"
-                            title="Print Receipt"
-                          >
-                            <Printer className="w-3.5 h-3.5 inline" />
-                          </button>
-                        )}
-                      </td>
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/80 dark:bg-navy-850 border-b border-slate-200 dark:border-navy-700 text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">
+                      <th className="py-3 px-4">Payment ID</th>
+                      <th className="py-3 px-4">Date & Time</th>
+                      <th className="py-3 px-4">Vehicle Number</th>
+                      <th className="py-3 px-4">Customer</th>
+                      <th className="py-3 px-4">Service</th>
+                      <th className="py-3 px-4">Mode</th>
+                      <th className="py-3 px-4 text-right">Amount</th>
+                      <th className="py-3 px-4">Staff</th>
+                      <th className="py-3 px-4 text-right">Receipt</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-navy-750">
+                    {paymentsList.map(pay => (
+                      <tr key={pay._id} className="hover:bg-slate-50/60 dark:hover:bg-navy-750/50 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-slate-800 dark:text-slate-200">
+                          {pay.paymentId}
+                        </td>
+
+                        <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
+                          {formatDate(pay.date, true)}
+                        </td>
+
+                        <td className="py-3 px-4 font-mono font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                          {pay.vehicleReg}
+                        </td>
+
+                        <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">
+                          {pay.customerName || 'Walk-in'}
+                        </td>
+
+                        <td className="py-3 px-4 capitalize text-slate-600 dark:text-slate-400">
+                          {pay.serviceName}
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <span className="font-bold uppercase text-[10px] bg-slate-100 dark:bg-navy-750 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded">
+                            {pay.paymentMethod}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4 text-right font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                          {formatCurrency(pay.amount)}
+                        </td>
+
+                        <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
+                          {pay.staffName || 'Admin'}
+                        </td>
+
+                        <td className="py-3 px-4 text-right">
+                          {pay.jobId && (
+                            <button
+                              type="button"
+                              onClick={() => setReceiptModalJob(pay.jobId)}
+                              className="p-1.5 rounded-lg border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors cursor-pointer"
+                              title="Print Receipt"
+                            >
+                              <Printer className="w-3.5 h-3.5 inline" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="md:hidden divide-y divide-slate-100 dark:divide-navy-750">
+                {paymentsList.map(pay => (
+                  <div key={pay._id} className="p-3 space-y-2 hover:bg-slate-50/60 dark:hover:bg-navy-750/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-mono text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">{pay.vehicleReg}</span>
+                        <span className="ml-2 font-mono text-[11px] text-slate-500 dark:text-slate-400">#{pay.paymentId}</span>
+                      </div>
+                      <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">{formatCurrency(pay.amount)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+                      <span className="font-medium">{pay.customerName || 'Walk-in'} • {pay.serviceName}</span>
+                      <span className="font-bold uppercase text-[10px] bg-slate-100 dark:bg-navy-750 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded">
+                        {pay.paymentMethod}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-navy-750/50 text-[11px] text-slate-400">
+                      <span>{formatDate(pay.date, true)} • {pay.staffName || 'Admin'}</span>
+                      {pay.jobId && (
+                        <button
+                          type="button"
+                          onClick={() => setReceiptModalJob(pay.jobId)}
+                          className="p-1 px-2 rounded-lg border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors cursor-pointer flex items-center gap-1 font-semibold text-[11px]"
+                          title="Print Receipt"
+                        >
+                          <Printer className="w-3 h-3" /> Receipt
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -252,67 +289,105 @@ export const Billing = () => {
           ) : invoicesList.length === 0 ? (
             <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-xs">No invoice records found.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50/80 dark:bg-navy-850 border-b border-slate-200 dark:border-navy-700 text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">
-                    <th className="py-3 px-4">Invoice #</th>
-                    <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-4">Vehicle Plate</th>
-                    <th className="py-3 px-4">Customer</th>
-                    <th className="py-3 px-4 text-right">Grand Total</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-right">Download</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-navy-750">
-                  {invoicesList.map(inv => (
-                    <tr key={inv._id} className="hover:bg-slate-50/60 dark:hover:bg-navy-750/50 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-brand-600 dark:text-brand-400">
-                        {inv.invoiceNumber}
-                      </td>
-
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
-                        {formatDate(inv.createdAt, false)}
-                      </td>
-
-                      <td className="py-3 px-4 font-mono font-bold uppercase text-slate-800 dark:text-slate-200">
-                        {inv.vehicleReg}
-                      </td>
-
-                      <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-200">
-                        {inv.customerId?.name || 'Walk-in'}
-                      </td>
-
-                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
-                        {formatCurrency(inv.grandTotal)}
-                      </td>
-
-                      <td className="py-3 px-4 text-center">
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                          inv.paymentStatus === 'paid'
-                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
-                            : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
-                        }`}>
-                          {inv.paymentStatus}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-4 text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          icon={Download}
-                          onClick={() => printPDF(`/api/v1/admin/invoices/${inv._id}/pdf`, `invoice_${inv.invoiceNumber}.pdf`)}
-                        >
-                          PDF
-                        </Button>
-                      </td>
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/80 dark:bg-navy-850 border-b border-slate-200 dark:border-navy-700 text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">
+                      <th className="py-3 px-4">Invoice #</th>
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Vehicle Plate</th>
+                      <th className="py-3 px-4">Customer</th>
+                      <th className="py-3 px-4 text-right">Grand Total</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-right">Download</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-navy-750">
+                    {invoicesList.map(inv => (
+                      <tr key={inv._id} className="hover:bg-slate-50/60 dark:hover:bg-navy-750/50 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-brand-600 dark:text-brand-400">
+                          {inv.invoiceNumber}
+                        </td>
+
+                        <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
+                          {formatDate(inv.createdAt, false)}
+                        </td>
+
+                        <td className="py-3 px-4 font-mono font-bold uppercase text-slate-800 dark:text-slate-200">
+                          {inv.vehicleReg}
+                        </td>
+
+                        <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-200">
+                          {inv.customerId?.name || 'Walk-in'}
+                        </td>
+
+                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
+                          {formatCurrency(inv.grandTotal)}
+                        </td>
+
+                        <td className="py-3 px-4 text-center">
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                            inv.paymentStatus === 'paid'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
+                              : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
+                          }`}>
+                            {inv.paymentStatus}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            icon={Download}
+                            onClick={() => printPDF(`/api/v1/admin/invoices/${inv._id}/pdf`, `invoice_${inv.invoiceNumber}.pdf`)}
+                          >
+                            PDF
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="md:hidden divide-y divide-slate-100 dark:divide-navy-750">
+                {invoicesList.map(inv => (
+                  <div key={inv._id} className="p-3 space-y-2 hover:bg-slate-50/60 dark:hover:bg-navy-750/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-mono text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">{inv.vehicleReg}</span>
+                        <span className="ml-2 font-mono text-[11px] font-bold text-brand-600 dark:text-brand-400">{inv.invoiceNumber}</span>
+                      </div>
+                      <span className="font-mono font-black text-slate-900 dark:text-white text-sm">{formatCurrency(inv.grandTotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+                      <span>{inv.customerId?.name || 'Walk-in'} • {formatDate(inv.createdAt, false)}</span>
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                        inv.paymentStatus === 'paid'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
+                          : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
+                      }`}>
+                        {inv.paymentStatus}
+                      </span>
+                    </div>
+                    <div className="flex justify-end pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon={Download}
+                        onClick={() => printPDF(`/api/v1/admin/invoices/${inv._id}/pdf`, `invoice_${inv.invoiceNumber}.pdf`)}
+                      >
+                        PDF
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}

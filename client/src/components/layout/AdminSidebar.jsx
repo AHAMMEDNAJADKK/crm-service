@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -38,6 +38,30 @@ export const AdminSidebar = ({ onOpenNewService }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Part 10 & 27: Keyboard Escape listener to close mobile navigation drawer
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && mobileNavOpen) {
+        setMobileNavOpen(false);
+      }
+    };
+    if (mobileNavOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileNavOpen, setMobileNavOpen]);
+
+  // Part 11: Body scroll lock when mobile sidebar is open
+  useEffect(() => {
+    if (mobileNavOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [mobileNavOpen]);
+
   const handleLogout = async () => {
     await logout();
     addToast('Logged out successfully', 'info');
@@ -56,7 +80,7 @@ export const AdminSidebar = ({ onOpenNewService }) => {
       title: 'Services',
       items: [
         {
-          name: 'Add Service',
+          name: 'Add Vehicle',
           icon: PlusCircle,
           action: () => {
             if (onOpenNewService) onOpenNewService();
@@ -65,8 +89,8 @@ export const AdminSidebar = ({ onOpenNewService }) => {
           }
         },
         { name: "Today's Services", path: '/admin/jobs', icon: Droplet },
-        { name: 'Service History', path: '/admin/history', icon: History },
-        { name: 'Calendar', path: '/admin/calendar', icon: Calendar }
+        { name: 'Calendar', path: '/admin/calendar', icon: Calendar },
+        { name: 'Service History', path: '/admin/history', icon: History }
       ]
     },
     {

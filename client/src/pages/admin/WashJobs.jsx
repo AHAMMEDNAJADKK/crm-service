@@ -20,7 +20,10 @@ import {
   AlertTriangle,
   Droplet,
   DollarSign,
-  Calendar
+  Calendar,
+  Tag,
+  IndianRupee,
+  AlertCircle
 } from 'lucide-react';
 
 import api from '../../services/api';
@@ -430,7 +433,8 @@ export const WashJobs = () => {
           </div>
 
           <Button onClick={() => setIsCreatorOpen(true)} icon={Plus}>
-            + Add Vehicle ({selectedDate})
+            <span className="hidden sm:inline">+ Add Vehicle ({selectedDate})</span>
+            <span className="sm:hidden">+ Add Vehicle</span>
           </Button>
         </div>
       </div>
@@ -564,44 +568,117 @@ export const WashJobs = () => {
           </div>
         </DndContext>
       ) : (
-        <TableContainer>
-          <Thead>
-            <Tr>
-              <Th isSticky>Token</Th>
-              <Th>Vehicle Reg</Th>
-              <Th>Type</Th>
-              <Th>Package</Th>
-              <Th>Staff Assigned</Th>
-              <Th>Status</Th>
-              <Th>Water (L)</Th>
-              <Th className="text-right">Actions</Th>
-            </Tr>
-          </Thead>
-          <Tbody>
+        <div className="space-y-4">
+          {/* Desktop Table View */}
+          <div className="hidden md:block">
+            <TableContainer>
+              <Thead>
+                <Tr>
+                  <Th isSticky>Token</Th>
+                  <Th>Vehicle Reg</Th>
+                  <Th>Type</Th>
+                  <Th>Package</Th>
+                  <Th>Staff Assigned</Th>
+                  <Th>Status</Th>
+                  <Th>Water (L)</Th>
+                  <Th className="text-right">Actions</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {jobsList.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={8} className="text-center text-slate-400 py-10">No wash records found</Td>
+                  </Tr>
+                ) : (
+                  jobsList.map((job) => (
+                    <Tr key={job._id}>
+                      <Td isSticky className="font-mono font-bold text-brand-600">{job.tokenNumber}</Td>
+                      <Td className="uppercase font-bold text-slate-800 dark:text-slate-100 tracking-wide font-mono">{job.vehicleReg}</Td>
+                      <Td className="uppercase text-xs">{job.vehicleType}</Td>
+                      <Td className="text-xs uppercase text-brand-500 font-bold">{job.washPackage ? job.washPackage.replace('-', ' ') : 'General Wash'}</Td>
+                      <Td className="text-xs">{job.assignedStaff}</Td>
+                      <Td><Badge variant={job.status}>{job.status}</Badge></Td>
+                      <Td className="text-xs">{job.waterUsedLitres || 0} L</Td>
+                      <Td className="text-right py-3.5">
+                        <Button onClick={() => openEditor(job._id)} size="sm" variant="outline">
+                          Manage
+                        </Button>
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </Tbody>
+            </TableContainer>
+          </div>
+
+          {/* Mobile Card View (Part 15) */}
+          <div className="md:hidden flex flex-col gap-3">
             {jobsList.length === 0 ? (
-              <Tr>
-                <Td colSpan={8} className="text-center text-slate-400 py-10">No wash records found</Td>
-              </Tr>
+              <div className="text-center text-slate-400 py-12 bg-white dark:bg-navy-800 rounded-2xl border border-slate-200 dark:border-navy-700">
+                No services found for {selectedDate}
+              </div>
             ) : (
               jobsList.map((job) => (
-                <Tr key={job._id}>
-                  <Td isSticky className="font-mono font-bold text-brand-600">{job.tokenNumber}</Td>
-                  <Td className="uppercase font-bold text-slate-800 tracking-wide font-mono">{job.vehicleReg}</Td>
-                  <Td className="uppercase text-xs">{job.vehicleType}</Td>
-                  <Td className="text-xs uppercase text-brand-500 font-bold">{job.washPackage.replace('-', ' ')}</Td>
-                  <Td className="text-xs">{job.assignedStaff}</Td>
-                  <Td><Badge variant={job.status}>{job.status}</Badge></Td>
-                  <Td className="text-xs">{job.waterUsedLitres} L</Td>
-                  <Td className="text-right py-3.5">
-                    <Button onClick={() => openEditor(job._id)} size="sm" variant="outline">
-                      Manage
-                    </Button>
-                  </Td>
-                </Tr>
+                <div
+                  key={job._id}
+                  className="bg-white dark:bg-navy-800 p-4 rounded-2xl border border-slate-200 dark:border-navy-700 shadow-xs flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-navy-700/60 pb-2.5">
+                    <div>
+                      <span className="font-mono font-black text-base text-slate-900 dark:text-white uppercase tracking-wider block">
+                        {job.vehicleReg}
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs uppercase font-extrabold text-brand-600 dark:text-brand-400">
+                          {job.vehicleType}
+                        </span>
+                        <span className="text-[10px] text-slate-400">•</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                          {formatDate(job.serviceDate || job.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="font-mono text-xs font-black text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/60 px-2 py-1 rounded-lg border border-brand-200/60">
+                      {job.tokenNumber}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-700 dark:text-slate-200 uppercase">
+                      {job.washPackage ? job.washPackage.replace(/-/g, ' ') : 'General Wash'}
+                    </span>
+                    <span className="font-mono font-black text-sm text-slate-900 dark:text-white">
+                      {formatCurrency(job.finalAmount || job.price || 0)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-navy-700/60">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Paid</span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(job.amountPaid || 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Balance</span>
+                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                          {formatCurrency(job.balance || 0)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={job.status}>{job.status}</Badge>
+                      <Button onClick={() => openEditor(job._id)} size="sm" variant="outline">
+                        View
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               ))
             )}
-          </Tbody>
-        </TableContainer>
+          </div>
+        </div>
       )}
 
       {/* FAST CHECK-IN CREATOR MODAL */}

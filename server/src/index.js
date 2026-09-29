@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const path = require('path');
+const fs = require('fs');
 const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const env = require('./config/env');
@@ -51,7 +52,27 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve Uploaded Files statically (uploads folder)
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+const rootUploadsDir = path.join(__dirname, '../../uploads');
+const serverUploadsDir = path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(rootUploadsDir));
+app.use('/uploads', express.static(serverUploadsDir));
+
+// Fallback direct logo route for /station-logo.jpg and /uploads/station-logo.jpg
+app.get(['/station-logo.jpg', '/uploads/station-logo.jpg'], (req, res) => {
+  const possiblePaths = [
+    path.join(rootUploadsDir, 'logo/station-logo.jpg'),
+    path.join(serverUploadsDir, 'logo/station-logo.jpg'),
+    path.join(rootUploadsDir, 'station-logo.jpg'),
+    path.join(serverUploadsDir, 'station-logo.jpg')
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.sendFile(p);
+    }
+  }
+  res.status(404).json({ success: false, error: 'Station logo not found', code: 404 });
+});
 
 // Health check endpoints with dynamic database connectivity reporting
 const healthHandler = (req, res) => {

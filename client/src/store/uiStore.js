@@ -97,15 +97,21 @@ const useUiStore = create((set, get) => ({
   clearNotifications: () => set({ unseenNotifications: 0 }),
 
   // Public Settings Cache
+  isFetchingSettings: false,
   setStationSettings: (stationSettings) => set({ stationSettings }),
   fetchStationSettings: async () => {
+    if (get().stationSettings || get().isFetchingSettings) return;
+    set({ isFetchingSettings: true });
     try {
       const { data } = await api.get('/api/v1/public/settings');
       if (data?.success) {
-        set({ stationSettings: data.data });
+        set({ stationSettings: data.data, isFetchingSettings: false });
+      } else {
+        set({ isFetchingSettings: false });
       }
     } catch (e) {
       console.error('Failed to fetch public settings:', e);
+      set({ isFetchingSettings: false });
     }
   }
 }));

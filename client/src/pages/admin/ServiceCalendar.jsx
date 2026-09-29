@@ -274,10 +274,28 @@ export const ServiceCalendar = () => {
             </div>
           </div>
 
+          {/* Mobile Quick Date Picker (Part 17) */}
+          <div className="sm:hidden flex items-center justify-between pb-3 mb-3 border-b border-slate-100 dark:border-navy-700/60">
+            <span className="text-xs font-bold text-slate-500">Pick Date:</span>
+            <input
+              type="date"
+              value={selectedDateKey}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setSelectedDateKey(e.target.value);
+                  const [y, m] = e.target.value.split('-').map(Number);
+                  setCurrentYear(y);
+                  setCurrentMonth(m);
+                }
+              }}
+              className="text-xs font-bold px-2.5 py-1 rounded-lg border border-slate-300 dark:border-navy-600 bg-slate-50 dark:bg-navy-900 text-slate-900 dark:text-white"
+            />
+          </div>
+
           {/* Day of Week Headers */}
           <div className="grid grid-cols-7 gap-1 text-center mb-1">
             {DAYS_OF_WEEK.map((day) => (
-              <span key={day} className="text-[11px] font-black uppercase tracking-wider text-slate-400 py-1">
+              <span key={day} className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 py-0.5 sm:py-1">
                 {day}
               </span>
             ))}
@@ -287,7 +305,7 @@ export const ServiceCalendar = () => {
           <div className="grid grid-cols-7 gap-1">
             {/* Blank leading slots */}
             {Array.from({ length: startDayOffset }).map((_, idx) => (
-              <div key={`empty-${idx}`} className="h-14 sm:h-16 rounded-xl bg-slate-50/50 dark:bg-navy-900/30" />
+              <div key={`empty-${idx}`} className="min-h-[42px] sm:h-16 rounded-lg sm:rounded-xl bg-slate-50/50 dark:bg-navy-900/30" />
             ))}
 
             {/* Actual Month Days */}
@@ -303,7 +321,7 @@ export const ServiceCalendar = () => {
                 <button
                   key={dateStr}
                   onClick={() => setSelectedDateKey(dateStr)}
-                  className={`h-14 sm:h-16 p-1.5 rounded-xl border flex flex-col justify-between transition-all cursor-pointer text-left relative ${
+                  className={`min-h-[42px] sm:h-16 p-1 sm:p-1.5 rounded-lg sm:rounded-xl border flex flex-col justify-between transition-all cursor-pointer text-left relative ${
                     isSelected
                       ? 'border-brand-600 bg-brand-50 dark:bg-brand-950/60 ring-2 ring-brand-500 shadow-sm'
                       : isTodayCell

@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Menu,
+  X,
   Search,
   Plus,
   Bell,
@@ -16,15 +17,16 @@ import ThemeSwitcher from '../common/ThemeSwitcher';
 const ROUTE_TITLES = {
   '/admin/dashboard': 'Command Dashboard',
   '/admin/jobs': "Today's Active Services",
+  '/admin/calendar': 'Service Calendar',
   '/admin/history': 'Service History & Logs',
   '/admin/customers': 'Customer Directory',
   '/admin/vehicles': 'Vehicle Registry',
-  '/admin/settings/pricing': 'Service Types & Pricing Matrix',
-  '/admin/billing': 'Payments & Income Ledger',
+  '/admin/settings/pricing': 'Pricing & Vehicle Types',
+  '/admin/billing': 'Payments & Income',
   '/admin/expenses': 'Expense Management',
   '/admin/outstanding': 'Outstanding Receivables',
-  '/admin/reports': 'Business Analytics & Reports',
-  '/admin/settings': 'Station Configuration',
+  '/admin/reports': 'Business Reports',
+  '/admin/settings': 'Station Settings',
   '/admin/staff': 'Staff Management'
 };
 
@@ -33,6 +35,7 @@ export const AdminHeader = ({ onOpenNewService }) => {
   const {
     toggleSidebar,
     toggleMobileNav,
+    mobileNavOpen,
     openGlobalSearch,
     unseenNotifications,
     addToast
@@ -49,39 +52,41 @@ export const AdminHeader = ({ onOpenNewService }) => {
   };
 
   return (
-    <header className="h-16 bg-white dark:bg-navy-850 border-b border-slate-200 dark:border-navy-700 flex items-center justify-between px-3 sm:px-6 shrink-0 z-20 select-none transition-colors">
+    <header className="h-16 bg-white dark:bg-navy-850 border-b border-slate-200 dark:border-navy-700 flex items-center justify-between px-2 sm:px-6 shrink-0 z-20 select-none transition-colors">
       {/* Left: Mobile Drawer Trigger / Desktop Sidebar Collapse & Page Title */}
-      <div className="flex items-center gap-2 sm:gap-4 overflow-hidden">
-        {/* Mobile menu button */}
+      <div className="flex items-center gap-1.5 sm:gap-4 overflow-hidden">
+        {/* Mobile menu button with explicit accessibility and state */}
         <button
+          type="button"
           onClick={toggleMobileNav}
-          className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-750 lg:hidden cursor-pointer"
-          aria-label="Open mobile navigation drawer"
+          className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-750 lg:hidden cursor-pointer shrink-0 transition-colors"
+          aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
         >
-          <Menu className="w-5 h-5" />
+          {mobileNavOpen ? <X className="w-5 h-5 text-brand-600 dark:text-brand-400" /> : <Menu className="w-5 h-5" />}
         </button>
 
         {/* Desktop collapse button */}
         <button
+          type="button"
           onClick={toggleSidebar}
-          className="hidden lg:flex p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-750 cursor-pointer"
+          className="hidden lg:flex p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-750 cursor-pointer transition-colors"
           aria-label="Toggle sidebar collapse"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <div className="flex flex-col overflow-hidden">
+        <div className="flex flex-col overflow-hidden max-w-[140px] xs:max-w-[180px] sm:max-w-none">
           <h1 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide truncate">
             {currentTitle}
           </h1>
-          <span className="hidden sm:inline text-[10px] text-brand-600 dark:text-brand-400 font-bold uppercase tracking-wider">
+          <span className="text-[9px] sm:text-[10px] text-brand-600 dark:text-brand-400 font-bold uppercase tracking-wider truncate">
             AHAMMED SONS WATER SERVICE
           </span>
         </div>
       </div>
 
       {/* Center: Global Search trigger button */}
-      <div className="flex-1 max-w-xs md:max-w-md mx-2 sm:mx-6">
+      <div className="flex-1 max-w-xs md:max-w-md mx-2 sm:mx-6 hidden sm:block">
         <button
           type="button"
           onClick={openGlobalSearch}
@@ -99,12 +104,22 @@ export const AdminHeader = ({ onOpenNewService }) => {
 
       {/* Right: Quick Action, Notifications, Theme, Profile */}
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* Mobile Search Icon */}
+        <button
+          type="button"
+          onClick={openGlobalSearch}
+          className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-750 sm:hidden cursor-pointer"
+          aria-label="Open search"
+        >
+          <Search className="w-4 h-4 text-brand-500" />
+        </button>
+
         {/* + New Service Quick Action Button */}
         {onOpenNewService && (
           <button
             type="button"
             onClick={onOpenNewService}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-black shadow-xs shadow-brand-600/30 transition-all active:scale-95 cursor-pointer shrink-0"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-black shadow-xs shadow-brand-600/30 transition-all active:scale-95 cursor-pointer shrink-0"
           >
             <Plus className="w-3.5 h-3.5 font-bold" />
             <span className="hidden sm:inline">New Service</span>
