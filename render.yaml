@@ -5,7 +5,7 @@ services:
     plan: free
     region: singapore
     buildCommand: npm install --prefix server
-    startCommand: node server.js
+    startCommand: node server/src/index.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV

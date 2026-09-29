@@ -7,8 +7,13 @@ export const useSocket = (roomName, onEventReceived, eventName = 'queue:update')
   useEffect(() => {
     if (!roomName) return;
 
-    // Connect to Backend Socket Server
-    socketRef.current = io(window.location.origin || 'http://localhost:5000', {
+    // Connect to Socket Server
+    const socketURL = (import.meta.env.VITE_API_URL || window.location.origin || '')
+      .replace(/\/+$/, '')
+      .replace(/\/api\/v1$/, '')
+      .replace(/\/api$/, '');
+
+    socketRef.current = io(socketURL || undefined, {
       path: '/socket.io',
       transports: ['websocket', 'polling']
     });
